@@ -1,0 +1,255 @@
+#!/bin/bash
+
+CONFIG=/etc/dtmrepo.conf
+eval `dtmrepo-globalconf $CONFIG`
+
+LOCKDIR="/var/lock"
+LOCKWAIT=30
+
+LOGDIR='/var/log/dtmrepo'
+LOGFILE="${LOGDIR}/dtmrepo.log"
+[ ! -d "${LOGDIR}" ] && ( mkdir -p ${LOGDIR} || exit 1 )
+
+UPDATE=0
+GENREPO=0
+VERBOSE=0
+FORCE=0
+SYNCALL=0
+INITIALISE=0
+CHECK=0
+
+SSLCLIENTKEY="/etc/pki/entitlement/sm-key"
+SSLCLIENTCERT="/etc/pki/entitlement/sm-cert"
+SMREPOCONF="/etc/yum.repos.d/redhat.repo"
+MASTERREPOCONF="/etc/yum.repos.d/master.repo"
+ISREGISTERED="Current"
+
+LOCALMARKER="local:"
+
+usage() {
+    echo
+    echo "Usage: `basename $0` [-acdfgiruv]"
+    echo -e "\t-a: sync all packages in a repo (default: new packages only)."
+    echo -e "\t-c: check the system for sanity"
+    echo -e "\t-d: <distro> argument required"
+    echo -e "\t-f: force the operation"
+    echo -e "\t-g: generate repodata"
+    echo -e "\t-i: initialise and register the system"
+    echo -e "\t-r: <repo> argument required"
+    echo -e "\t-u: update"
+    echo -e "\t-v: verbose"
+    exit 1
+}
+
+fix_cert() {
+    CWD=$(pwd)
+    \rm ${SSLCLIENTKEY} ${SSLCLIENTCERT} &> /dev/null
+    eval $(egrep 'sslclient(key|cert)' ${MASTERREPOCONF}|sort -u|sed 's/ //g')
+    cd $(dirname ${SSLCLIENTKEY})
+    ln -s $(basename ${sslclientkey}) $(basename ${SSLCLIENTKEY})
+    ln -s $(basename ${sslclientcert}) $(basename ${SSLCLIENTCERT})
+    cd ${CWD}
+}
+
+configure_master_repo() {
+    subscription-manager config --rhsm.manage_repos=1
+    yum repolist
+    \mv ${SMREPOCONF} ${MASTERREPOCONF}
+    subscription-manager config --rhsm.manage_repos=0
+    sed -ri 's/enabled *= *1/enabled = 0/' ${MASTERREPOCONF}
+}
+
+sanity_check() {
+    SUBSERROR=0
+    REPOERROR=0
+    CERTERROR=0
+
+    if [ "${subscribed}" -eq 1 ]; then
+        SMSTATUS=$(subscription-manager status|grep 'Overall Status'|awk '{print $NF}')
+        [ "${SMSTATUS}" != "${ISREGISTERED}" ] && SUBSERROR=1
+        [  ! -e "${MASTERREPOCONF}" ] && REPOERROR=1
+        [ ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" ] && CERTERROR=1
+    fi
+
+    [ "${SUBSERROR}" -eq 1 ] && echo "Subscription manager is set to active in ${CONFIG} but the system is not registered."
+    [ "${REPOERROR}" -eq 1 ] && echo "${MASTERREPOCONF} is missing."
+    [ "${CERTERROR}" -eq 1 ] && echo "Cert symlinks are missing."
+
+    [ "${SUBSERROR}" -eq 1 -o "${REPOERROR}" -eq 1 -o "${CERTERROR}" -eq 1 ] && exit 1
+
+    return 0
+}
+
+initialise() {
+    SMSTATUS=$(subscription-manager status|grep 'Overall Status'|awk '{print $NF}')
+    if [ "${SMSTATUS}" != "${ISREGISTERED}" ]; then
+        read -p "Red Hat username: " USERNAME
+        read -s -p "Red Hat password: " PASSWORD
+        echo
+        echo "Attempting to register the system using the provided credentials..."
+        subscription-manager register --username=${USERNAME} --password=${PASSWORD} && subscription-manager attach --auto
+        [ "$?" -ne 0 ] && exit 1
+        echo "System registration successful."
+    fi
+
+    echo "Preparing master repo configuration."
+    configure_master_repo
+    echo "Creating cert symlinks."
+    fix_cert
+}
+
+update_lock_error() {
+    echo "Another update process has a lock on $1."
+    exit 1
+}
+
+genrepo_lock_error() {
+    echo "An update or createrepo process has a lock on $1."
+    exit 1
+}
+
+update_repo() {
+    _REPODIR=$1
+    _REPOID=$2
+    _DISTRO=$3
+    _ARCH=$4
+    _SYNCALL="-n"
+
+    [ "${VERBOSE}" -eq 1 ] && _VERBOSE="-v"
+    [ "${SYNCALL}" -eq 1 ] && _SYNCALL=""
+
+    _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
+    _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
+
+    [ ! -d "${_DESTDIR}" ] && ( mkdir -p "${_DESTDIR}" || exit 1 )
+
+    (
+    flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
+    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
+        _SOURCEDIR=${_REPOID#${LOCALMARKER}}
+        rsync -a ${_SOURCEDIR}/ ${_DESTDIR}
+    else
+        reposync ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
+    fi
+    ) 1001> ${_LOCKFILE}
+}
+
+gen_repodata() {
+    _REPODIR=$1
+    _REPOID=$2
+    _DISTRO=$3
+    _FORCE="-C"
+    _VERBOSE=""
+
+    [ "${FORCE}" -eq 1 ] && _FORCE=" "
+    [ "${VERBOSE}" -eq 1 ] && _VERBOSE="-v"
+
+    _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
+    _DESTDIR="${rootdir}/$_DISTRO/$_REPODIR"
+
+    if [ ! -d "${_DESTDIR}" ]; then
+        if [ "${VERBOSE}" -eq 1 ]; then
+            echo "${_DESTDIR} for ${_DISTRO} does not exist."
+        fi
+        exit 1
+    fi
+
+    (
+    flock -w ${LOCKWAIT} 1001 || genrepo_lock_error ${_DESTDIR}
+    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
+        createrepo ${_FORCE} ${_VERBOSE} --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+    else
+        repomanage -o -k ${keep} ${_DESTDIR} | xargs rm -f
+        createrepo ${_FORCE} ${_VERBOSE} --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+    fi
+    ) 1001> ${_LOCKFILE}
+
+}
+
+action() {
+    [ "${UPDATE}" -eq 1 ] && update_repo $1 $2 $3 $4
+    [ "${GENREPO}" -eq 1 ] && gen_repodata $1 $2 $3
+}
+
+############################################################
+# program start
+
+REPO=""
+DISTRO=""
+OPTERR=1
+OPTIND=1
+while getopts 'acifugvr:d:' opt; do
+    case "${opt}" in
+        a)  SYNCALL=1
+            ;;
+        c)  CHECK=1
+            ;;
+        i)  INITIALISE=1
+            ;;
+        f)  FORCE=1
+            ;;
+        u)  UPDATE=1
+            ;;
+        g)  GENREPO=1
+            ;;
+        r)  REPO=${OPTARG}
+            ;;
+        d)  DISTRO=${OPTARG}
+            ;;
+        v)  VERBOSE=1
+            ;;
+        \?)
+            usage
+            ;;
+    esac
+done
+
+[ "${CHECK}" -eq 1 ] && sanity_check
+[ "${INITIALISE}" -eq 1 ] && initialise
+
+if [ "${DISTRO}" != "" ]; then
+    if [ ! -f "${confdir}/${DISTRO}.conf" ]; then
+        echo "${DISTRO} has no configuration"
+        exit 1
+    else
+        DISTROLIST="${DISTRO}.conf"
+    fi
+else
+    DISTROLIST=$(for i in $(ls ${confdir}/*.conf 2>/dev/null); do basename $i; done)
+fi
+
+if [ "${DISTROLIST}" == "" ]; then
+    if [ "${VERBOSE}" -eq 1 ]; then
+        echo "Could not find any distribution configuration. Nothing to do here. Exiting."
+    fi
+    exit 0
+fi
+
+for DIST in ${DISTROLIST}; do
+    eval $(dtmrepo-repoconf ${confdir}/${DIST})
+    if [ "${#repostore[@]}" -eq 0 ]; then
+        if [ "${VERBOSE}" -eq 1 ]; then
+            echo "No repos defined for ${DIST%%\.conf}. Skipping..."
+        fi
+        continue
+    fi
+
+    NREPO=$(expr ${#repostore[@]} - 1)
+    for i in $(seq 0 ${NREPO}); do
+        if [ "${REPO}" != "" ]; then
+            if [ "${REPO}" != "${repostore[$i]}" ]; then
+                continue
+            else
+                _REPONAME=${reponame[$i]}
+                action ${REPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
+                break
+            fi
+        else
+            _REPO=${repostore[$i]}
+            _REPONAME=${reponame[$i]}
+            action ${_REPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
+        fi
+    done
+done
+
+

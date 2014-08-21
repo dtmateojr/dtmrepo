@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+
+import ConfigParser
+import sys
+
+def usage():
+    sys.stderr.write('Usage: %s <config file>\n\n' % sys.argv[0].split('/')[-1])
+    sys.exit(1)
+
+def read_conf(config):
+    parser = ConfigParser.SafeConfigParser()
+    
+    try:
+        parser.read(config)
+    except:
+        sys.stderr.write('Error reading %s.\n' % config)
+        sys.exit(1)
+
+    try:
+        global_opts = parser.items('global')
+    except:
+        sys.stderr.write('Missing [global] section in %s.\n' % config)
+        sys.exit(1)
+
+    for opt,val in global_opts:
+        print '%s=%s' % (opt, val)
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        usage()
+
+    read_conf(sys.argv[1])
+    

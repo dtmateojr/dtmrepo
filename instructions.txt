@@ -1,0 +1,124 @@
+dtmrepo
+
+dtmrepo is a mrepo replacement. The main difference between the two is that mrepo uses RHN classic subscription to synchronise with Red Hat while dtmrepo uses subscription-manager. They handle non-RHN repos almost the same way so http, ftp and file-based repos should work with dtmrepo.
+
+I. Prerequisites
+
+Unlike mrepo, dtmrepo relies heavily on external yum utilities which means that repositories must be properly configured before they can be utilised. It is not enough that you define an epel configuration, you need to make sure that the epel yum repo is also configured. This restriction is further explained in the Configuration section below.
+
+If you need to sync with Red Hat you will require a valid subscription. You will also need to install the subscription-manager package.
+
+II. Installation
+
+"Installation" is easy:
+
+cp dtmrepo dtmrepo-globalconf dtmrepo-repoconf /usr/local/sbin
+chmod +x /usr/local/sbin/dtmrepo*
+cp dtmrepo.conf /etc
+mkdir /etc/dtmrepo.conf.d
+mkdir /var/dtmrepo
+
+You may now prepare the web server:
+
+yum -y install httpd
+cp httpd-dtmrepo.conf /etc/httpd/conf.d
+chkconfig httpd on
+service httpd start
+
+III. Configuration
+
+If you wish to synchronise Red Hat packages, make sure that your dtmrepo server is registered and subscribed. Using the default dtmrepo.conf, perform the following:
+
+    dtmrepo -i
+
+This will register and initialise dtmrepo. During registration it will ask for your Red Hat credentials and attempt to subscribe your system using subscription-manager. It will also configure /etc/rhsm/rhsm.conf such that dtmrepo will internally manage the repositories defined under /etc/yum.repos.d. Once the initialisation is finished you may add other repos (e.g. epel) that you want to sync in a separate .repo file in /etc/yum.repos.d.
+
+
+    The main configuration file for dtmrepo is /etc/dtmrepo.conf. Below are the default settings:
+
+    [global]
+    rootdir = /var/dtmrepo
+    confdir = /etc/dtmrepo.conf.d
+    keep = 3
+    arch = x86_64
+    subscribed = 1
+
+    At the moment there is just one section called [global]. This section is required.
+        rootdir – this is the where packages are stored. Each distro will have its own subdirectory.
+        confdir -- this is where distro specific configuration files are located
+        keep -- the number of package versions to keep. This is probably the most sought-after feature that is missing in mrepo.
+        arch -- default distro architecture. This can be overridden in the individual distro configuration files defined under confdir.
+        subscribed -- the system is subscribed and wants to sync from Red Hat
+    /etc/dtmrepo.conf.d
+
+    This directory contains distro-specific configuration files. The configuration files must have an extension of .conf. The filename defines the distro name. For example, the distro rhel5s-x86_64 will have a configuration file called /etc/dtmrepo.conf.d/rhel5s-x86_64.conf. The distro name also corresponds to the directory /var/dtmrepo/distro where repo packages are saved during synchronisation.
+
+    Below is a sample distro.conf configuration file:
+    [control]
+    arch = i386
+    keep = 2
+
+    [repos]
+    os = rhel-5-server-rpms
+    optional = rhel-5-server-optional-rpms
+    supplementary = rhel-5-server-supplementary-rpms
+    epel = epel-5-x86_64
+    foo = local:/var/dtmrepo/foo/el5/x86_64
+
+    There are two sections: [control] and [repos]. The [control] section may override some of the global configuration options. In the example above it overrides the architecture and the number of package versions to keep. The [repos] section defines the different repositories that will be synced. The format is targetdir = repoid. The targetdir corresponds to the directory /var/dtmrepo/rhel5s-x86_64/targetdir and repoid is a real yum repository that is preconfigured under /etc/yum.repos.d. 
+    At the moment there are two types of repoid that is accepted by dtmrepo. The first type is the most common where the repoid is a real yum repo. In the example above, the line epel = epel-5-x86_64 implies that epel-5-x86_64 is a yum repo defined under /etc/yum.repos.d that goes something like this:
+
+    [epel-5-x86_64]
+    name=epel-5
+    mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=epel-5&arch=x86_64
+    failovermethod=priority
+    enabled=0
+    gpgcheck=1
+    gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-5
+
+    Note that the repo need not be (and ideally should not be) enabled on the dtmrepo server. Setting enabled=0 will avoid dtmrepo from dying due to improperly configured repositories.
+
+    The second type of repoid is not a real repository but just a collection of packages stored in a directory somewhere. This is specified by the identifier local:. In the example, /var/dtmrepo/foo/el5/x86_64 need not contain a repodata. The disadvantage of using this kind of repoid is that dtmrepo would always sync everything in the source directory. It means that the keep option is totally ignored for this repo (other repos in the same distro are not affected).
+
+IV. Usage
+
+dtmrepo accepts several commandline options namely:
+
+    -a : sync all packages. Useful when you are starting to build your repo server. By default only newer packages are synced
+    -d : process only this distro. If not specified then all distros are processed
+    -r : process only this repo. If not specified then all repos are processed
+    -u : sync packages
+    -g : generate repodata
+    -f : force the operation. Normally, dtmrepo will not attempt to generate new repodata if it's newer than any package in the repo.
+    -c : perform sanity checking. It will output the problems it has detected
+    -i : register and initialise the system. Only relevant if you wish to sync with Red Hat. Use it if the sanity check reports any error. It is smart enough to fix only the errors encountered.
+    -v : run in verbose mode. Useful when dtmrepo seems to ignore you.
+
+V. Usage Examples
+
+    dtmrepo -?
+        show help
+
+    dtmrepo -c
+        perform sanity checks
+
+    dtmrepo -i
+        register and initialise the system
+
+    dtmrepo -augfv
+        sync all packages and force the generation of repodata for all repos and all distros and show me what you're doing. Useful during initial build of a dtmrepo server.
+
+    dtmrepo -ug -r epel
+        sync and generate repo data for epel on all distros
+
+    dtmrepo -u -d rhel5s
+        sync only the rhel5s distro
+
+    dtmrepo -fg -r tnspay -d rhel5s
+        generate repodata for the tnspay repo in the rhel5s distro
+
+VI. Limitations
+
+At the moment, dtmrepo can only sync for the same "type" of Red Hat release. For example, if the dtmrepo server is running RHEL 6 Server then it can only sync Server repos (i.e. not Workstation repos). Of course this restriction does not affect non-Red Hat repos.
+
+There's no ISO mounting support yet, unlike mrepo. I don't find it critical for my use.
