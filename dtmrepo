@@ -138,7 +138,7 @@ gen_repodata() {
     _REPODIR=$1
     _REPOID=$2
     _DISTRO=$3
-    _FORCE="-C"
+    _FORCE="-C --update"
     _VERBOSE=""
 
     [ "${FORCE}" -eq 1 ] && _FORCE=" "
@@ -157,10 +157,10 @@ gen_repodata() {
     (
     flock -w ${LOCKWAIT} 1001 || genrepo_lock_error ${_DESTDIR}
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
-        createrepo ${_FORCE} ${_VERBOSE} -s sha --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+        createrepo ${_FORCE} ${_VERBOSE} -s sha --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     else
         repomanage -o -k ${keep} ${_DESTDIR} | xargs rm -f
-        createrepo ${_FORCE} ${_VERBOSE} -s sha --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+        createrepo ${_FORCE} ${_VERBOSE} -s sha --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     fi
     ) 1001> ${_LOCKFILE}
 
