@@ -127,7 +127,7 @@ update_repo() {
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         _SOURCEDIR=${_REPOID#${LOCALMARKER}}
-        rsync -a ${_SOURCEDIR}/ ${_DESTDIR}
+        rsync  ${_VERBOSE} -a ${_SOURCEDIR}/ ${_DESTDIR}
     else
         reposync ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
     fi
@@ -157,17 +157,20 @@ gen_repodata() {
     (
     flock -w ${LOCKWAIT} 1001 || genrepo_lock_error ${_DESTDIR}
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
-        createrepo ${_FORCE} ${_VERBOSE} --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+        createrepo ${_FORCE} ${_VERBOSE} -s sha --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     else
         repomanage -o -k ${keep} ${_DESTDIR} | xargs rm -f
-        createrepo ${_FORCE} ${_VERBOSE} --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+        createrepo ${_FORCE} ${_VERBOSE} -s sha --update --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     fi
     ) 1001> ${_LOCKFILE}
 
 }
 
 action() {
+    [ "${VERBOSE}" -eq 1 ] && echo "Synchronising distro $3 repo $1."
     [ "${UPDATE}" -eq 1 ] && update_repo $1 $2 $3 $4
+
+    [ "${VERBOSE}" -eq 1 ] && echo "Generating repodata for distro $3 repo $1."
     [ "${GENREPO}" -eq 1 ] && gen_repodata $1 $2 $3
 }
 
