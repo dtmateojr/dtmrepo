@@ -16,7 +16,7 @@ VERBOSE=0
 FORCE=0
 SYNCALL=0
 INITIALISE=0
-CHECK=0
+AUTOFIX=0
 
 SSLCLIENTKEY="/etc/pki/entitlement/sm-key"
 SSLCLIENTCERT="/etc/pki/entitlement/sm-cert"
@@ -28,7 +28,7 @@ LOCALMARKER="local:"
 
 usage() {
     echo
-    echo "Usage: `basename $0` [-acdfgiruv]"
+    echo "Usage: `basename $0` [-adfgiruvx]"
     echo -e "\t-a: sync all packages in a repo (default: new packages only)."
     echo -e "\t-c: check the system for sanity"
     echo -e "\t-d: <distro> argument required"
@@ -38,6 +38,7 @@ usage() {
     echo -e "\t-r: <repo> argument required"
     echo -e "\t-u: update"
     echo -e "\t-v: verbose"
+    echo -e "\t-x: automatically fix subscription problems"
     exit 1
 }
 
@@ -181,11 +182,9 @@ REPO=""
 DISTRO=""
 OPTERR=1
 OPTIND=1
-while getopts 'acifugvr:d:' opt; do
+while getopts 'aifugvxr:d:' opt; do
     case "${opt}" in
         a)  SYNCALL=1
-            ;;
-        c)  CHECK=1
             ;;
         i)  INITIALISE=1
             ;;
@@ -201,14 +200,24 @@ while getopts 'acifugvr:d:' opt; do
             ;;
         v)  VERBOSE=1
             ;;
+        x)  AUTOFIX=1
+            ;;
         \?)
             usage
             ;;
     esac
 done
 
-[ "${CHECK}" -eq 1 ] && sanity_check
 [ "${INITIALISE}" -eq 1 ] && initialise
+
+if [ "${AUTOFIX}" -eq 1 ]; then
+    if [ ! -e "${MASTERREPOCONF}" -o ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" ]; then
+        configure_master_repo
+        fix_cert
+    fi
+else
+    sanity_check
+fi
 
 if [ "${DISTRO}" != "" ]; then
     if [ ! -f "${confdir}/${DISTRO}.conf" ]; then
