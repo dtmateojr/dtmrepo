@@ -90,7 +90,7 @@ dtmrepo accepts several commandline options namely:
     -u : sync packages
     -g : generate repodata
     -f : force the operation. Normally, dtmrepo will not attempt to generate new repodata if it's newer than any package in the repo.
-    -c : perform sanity checking. It will output the problems it has detected
+    -x : autofix. Red Hat subscription-manager automatically updates the subscription certificate. This option automatically updates master.repo with the new cert.
     -i : register and initialise the system. Only relevant if you wish to sync with Red Hat. Use it if the sanity check reports any error. It is smart enough to fix only the errors encountered.
     -v : run in verbose mode. Useful when dtmrepo seems to ignore you.
 
@@ -114,8 +114,11 @@ V. Usage Examples
     dtmrepo -u -d rhel5s
         sync only the rhel5s distro
 
-    dtmrepo -fg -r tnspay -d rhel5s
-        generate repodata for the tnspay repo in the rhel5s distro
+    dtmrepo -fg -r foo -d rhel5s
+        generate repodata for the foo repo in the rhel5s distro
+
+    dtmrepo -xug
+        a useful command for automatic updates via cron
 
 VI. Limitations
 
