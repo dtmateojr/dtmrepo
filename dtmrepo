@@ -115,8 +115,13 @@ update_repo() {
     _DISTRO=$3
     _ARCH=$4
     _SYNCALL="-n"
+    _QUIET="-q"
+    _VERBOSE=""
 
-    [ "${VERBOSE}" -eq 1 ] && _VERBOSE="-v"
+    if [ "${VERBOSE}" -eq 1 ]; then
+        _VERBOSE="-v"
+        _QUIET=""
+    fi
     [ "${SYNCALL}" -eq 1 ] && _SYNCALL=""
 
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
@@ -128,9 +133,9 @@ update_repo() {
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         _SOURCEDIR=${_REPOID#${LOCALMARKER}}
-        rsync  ${_VERBOSE} -a ${_SOURCEDIR}/ ${_DESTDIR}
+        rsync  ${_QUIET} ${_VERBOSE} -a ${_SOURCEDIR}/ ${_DESTDIR}
     else
-        reposync ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
+        reposync ${_QUIET} ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
     fi
     ) 1001> ${_LOCKFILE}
 }
