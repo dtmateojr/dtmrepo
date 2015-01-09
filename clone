@@ -1,0 +1,103 @@
+#!/bin/bash
+
+usage() {
+    echo
+    echo "Usage: `basename $0` <source> <dest>"
+    exit 1
+}
+
+samefs() {
+    FS1=`stat -c %d $1`
+    FS2=`stat -c %d $2`
+
+    [ "${FS1}" == "${FS2}" ] && return 0
+}
+
+cderror() {
+    echo "Could not cd into $1."
+    exit 1
+}
+
+toucherror() {
+    echo "Write test failed on $1."
+    exit 1
+}
+
+mkdirerror() {
+    echo "Error creating $1."
+    exit 1
+}
+
+copyerror() {
+    echo "Error during cheap copy."
+    exit 1
+}
+
+docopy() {
+    SOURCE=$1
+    DEST=$2
+    SOURCETYPE=''
+    DESTTYPE=''
+
+    if [ -e ${SOURCE} ]; then
+        SOURCETYPE=$(stat -c %F ${SOURCE})
+    else
+        echo "${SOURCE} does not exist."
+        exit 1
+    fi
+
+    if [ -e ${DEST} ]; then
+        DESTTYPE=$(stat -c %F ${DEST})
+        if [ "${DESTTYPE}" == 'directory' ]; then
+            if ! samefs ${SOURCE} ${DEST}; then
+                echo "$(basename $0) will only work if ${SOURCE} and ${DEST} are in the same filesystem."
+                exit 1
+            fi
+        else
+            echo 'Destination exists. Aborting.'
+            exit 1
+        fi
+    fi
+
+    if [ "${SOURCETYPE}" == 'directory' ]; then
+        [ -e "${DEST}" ] && DEST="${DEST}/$(basename ${SOURCE})"
+
+        if mkdir -p ${DEST}; then
+            if ! samefs ${SOURCE} ${DEST}; then
+                echo "$(basename $0) will only work if ${SOURCE} and ${DEST} are in the same filesystem."
+                \rmdir ${DEST}
+                exit 1
+            fi
+        else
+            mkdirerror ${DEST}
+            exit 1
+        fi
+
+        TESTFILE=${DEST}/$(basename $(mktemp))
+        if touch ${TESTFILE}; then
+            \rm ${TESTFILE}
+        else
+            toucherror ${DEST}
+        fi
+
+        CWD=$(pwd)
+        cd ${DEST} || cderror ${DEST}
+        DEST=$(pwd)
+        cd ${CWD}
+        cd ${SOURCE} || cderror ${SOURCE}
+
+        find -type d -exec mkdir -p ${DEST}/{} \;
+        [ $? -ne 0 ] && copyerror
+        find ! -type d -exec \ln -f {} ${DEST}/{} \;
+        [ $? -ne 0 ] && copyerror
+    else
+        \ln -f ${SOURCE} ${DEST}
+    fi
+}
+
+[ $# -lt 2 ] && usage
+
+SOURCE=$1
+DEST=$2
+
+docopy ${SOURCE} ${DEST}
