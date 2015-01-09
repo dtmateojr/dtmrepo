@@ -29,7 +29,7 @@ mkdirerror() {
 }
 
 copyerror() {
-    echo "Error during cheap copy."
+    echo "Error during copy."
     exit 1
 }
 
