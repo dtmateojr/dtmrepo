@@ -165,7 +165,7 @@ gen_repodata() {
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     else
-        repomanage -o -k ${keep} ${_DESTDIR} | xargs rm -f
+        repomanage -c -o -k ${keep} ${_DESTDIR} | xargs rm -f
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     fi
     ) 1001> ${_LOCKFILE}
@@ -173,11 +173,15 @@ gen_repodata() {
 }
 
 action() {
-    [ "${VERBOSE}" -eq 1 ] && echo "Synchronising distro $3 repo $1."
-    [ "${UPDATE}" -eq 1 ] && update_repo $1 $2 $3 $4
+    if [ "${UPDATE}" -eq 1 ]; then
+        [ "${VERBOSE}" -eq 1 ] && echo "Synchronising distro $3 repo $1."
+        update_repo $1 $2 $3 $4
+    fi
 
-    [ "${VERBOSE}" -eq 1 ] && echo "Generating repodata for distro $3 repo $1."
-    [ "${GENREPO}" -eq 1 ] && gen_repodata $1 $2 $3
+    if [ "${GENREPO}" -eq 1 ]; then
+        [ "${VERBOSE}" -eq 1 ] && echo "Generating repodata for distro $3 repo $1."
+        gen_repodata $1 $2 $3
+    fi
 }
 
 ############################################################
