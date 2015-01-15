@@ -127,16 +127,20 @@ update_repo() {
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
+    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
+        _SOURCEDIR=${_REPOID#${LOCALMARKER}}
+        if [ ! -e "${_DESTDIR}" ]; then
+            [ "${_VERBOSE}" != "" ] && echo "Creating symlink for local source ${_SOURCEDIR}"
+            \ln -s ${_SOURCEDIR} ${_DESTDIR}
+        fi
+        return
+    fi
+
     [ ! -d "${_DESTDIR}" ] && ( mkdir -p "${_DESTDIR}" || exit 1 )
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
-    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
-        _SOURCEDIR=${_REPOID#${LOCALMARKER}}
-        rsync  ${_QUIET} ${_VERBOSE} -a ${_SOURCEDIR}/ ${_DESTDIR}
-    else
-        reposync ${_QUIET} ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
-    fi
+    reposync ${_QUIET} ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
     ) 1001> ${_LOCKFILE}
 }
 
