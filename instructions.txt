@@ -85,8 +85,8 @@ IV. Usage
 dtmrepo accepts several commandline options namely:
 
     -a : sync all packages. Useful when you are starting to build your repo server. By default only newer packages are synced
-    -d : process only this distro. If not specified then all distros are processed
-    -r : process only this repo. If not specified then all repos are processed
+    -d : comma-separated list of distros to process. If not specified then all distros are processed
+    -r : comma-separated list of repos to process. If not specified then all repos are processed
     -u : sync packages
     -g : generate repodata
     -f : force the operation. Normally, dtmrepo will not attempt to generate new repodata if it's newer than any package in the repo.
@@ -111,8 +111,14 @@ V. Usage Examples
     dtmrepo -ug -r epel
         sync and generate repo data for epel on all distros
 
+    dtmrepo -u -r foo,bar
+        sync foo and bar repos on all distros
+
     dtmrepo -u -d rhel5s
         sync only the rhel5s distro
+
+    dtmrepo -u -d rhel5s,rhel6s
+        sync all repos on rhel5s and rhel6s distros
 
     dtmrepo -fg -r foo -d rhel5s
         generate repodata for the foo repo in the rhel5s distro

@@ -188,13 +188,68 @@ action() {
     fi
 }
 
+process_distro_repo() {
+# TDISTRO -- target distro
+# TREPO -- target repo
+
+    if [ "${TDISTRO}" != "" ]; then
+        if [ ! -f "${confdir}/${TDISTRO}.conf" ]; then
+            echo "${TDISTRO} has no configuration"
+            exit 1
+        else
+            DISTROLIST="${TDISTRO}.conf"
+        fi
+    else
+        DISTROLIST=$(for i in ${confdir}/*.conf; do basename $i; done)
+    fi
+
+    if [ "${DISTROLIST}" == "" ]; then
+        if [ "${VERBOSE}" -eq 1 ]; then
+            echo "Could not find any distribution configuration. Nothing to do here. Exiting."
+        fi
+        exit 0
+    fi
+
+    for DIST in ${DISTROLIST}; do
+        eval $(dtmrepo-repoconf ${confdir}/${DIST})
+        if [ "${#repostore[@]}" -eq 0 ]; then
+            if [ "${VERBOSE}" -eq 1 ]; then
+                echo "No repos defined for ${DIST%%\.conf}. Skipping..."
+            fi
+            continue
+        fi
+
+        NREPO=$(expr ${#repostore[@]} - 1)
+        for i in $(seq 0 ${NREPO}); do
+            if [ "${TREPO}" != "" ]; then
+                if [ "${TREPO}" != "${repostore[$i]}" ]; then
+                    continue
+                else
+                    _REPONAME=${reponame[$i]}
+                    action ${TREPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
+                    break
+                fi
+            else
+                _REPO=${repostore[$i]}
+                _REPONAME=${reponame[$i]}
+                action ${_REPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
+            fi
+        done
+    done
+}
+
 ############################################################
 # program start
 
 REPO=""
+REPOS=""
+TREPO=""
 DISTRO=""
+DISTROS=""
+TDISTRO=""
 OPTERR=1
 OPTIND=1
+
 while getopts 'aifugvxr:d:' opt; do
     case "${opt}" in
         a)  SYNCALL=1
@@ -232,49 +287,25 @@ else
     sanity_check
 fi
 
-if [ "${DISTRO}" != "" ]; then
-    if [ ! -f "${confdir}/${DISTRO}.conf" ]; then
-        echo "${DISTRO} has no configuration"
-        exit 1
+[ "${DISTRO}" != "" ] && DISTROS="${DISTRO//,/ }"
+[ "${REPO}" != "" ] && REPOS="${REPO//,/ }"
+
+if [ "${DISTROS}" == "" ]; then
+    if [ "${REPOS}" == "" ]; then
+        process_distro_repo
     else
-        DISTROLIST="${DISTRO}.conf"
+        for TREPO in ${REPOS}; do
+            process_distro_repo
+        done
     fi
 else
-    DISTROLIST=$(for i in $(ls ${confdir}/*.conf 2>/dev/null); do basename $i; done)
-fi
-
-if [ "${DISTROLIST}" == "" ]; then
-    if [ "${VERBOSE}" -eq 1 ]; then
-        echo "Could not find any distribution configuration. Nothing to do here. Exiting."
-    fi
-    exit 0
-fi
-
-for DIST in ${DISTROLIST}; do
-    eval $(dtmrepo-repoconf ${confdir}/${DIST})
-    if [ "${#repostore[@]}" -eq 0 ]; then
-        if [ "${VERBOSE}" -eq 1 ]; then
-            echo "No repos defined for ${DIST%%\.conf}. Skipping..."
-        fi
-        continue
-    fi
-
-    NREPO=$(expr ${#repostore[@]} - 1)
-    for i in $(seq 0 ${NREPO}); do
-        if [ "${REPO}" != "" ]; then
-            if [ "${REPO}" != "${repostore[$i]}" ]; then
-                continue
-            else
-                _REPONAME=${reponame[$i]}
-                action ${REPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
-                break
-            fi
+    for TDISTRO in ${DISTROS}; do
+        if [ "${REPOS}" == "" ]; then
+            process_distro_repo
         else
-            _REPO=${repostore[$i]}
-            _REPONAME=${reponame[$i]}
-            action ${_REPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
+            for TREPO in ${REPOS}; do
+                process_distro_repo
+            done
         fi
     done
-done
-
-
+fi
