@@ -65,7 +65,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     epel = epel-5-x86_64
     foo = local:/var/dtmrepo/foo/el5/x86_64
 
-    There are two sections: [control] and [repos]. The [control] section may override some of the global configuration options. In the example above it overrides the architecture and the number of package versions to keep. The [repos] section defines the different repositories that will be synced. The format is targetdir = repoid. The targetdir corresponds to the directory /var/dtmrepo/rhel5s-x86_64/targetdir and repoid is a real yum repository that is preconfigured under /etc/yum.repos.d. 
+    There are two sections: [control] and [repos]. The [control] section may override some of the global configuration options. In the example above it overrides the architecture and the number of package versions to keep. The [repos] section defines the different repositories that will be synced. The format is targetdir = repoid. The targetdir corresponds to the directory /var/dtmrepo/rhel5s-x86_64/targetdir and repoid is a real yum repository that is preconfigured under /etc/yum.repos.d.
     At the moment there are two types of repoid that is accepted by dtmrepo. The first type is the most common where the repoid is a real yum repo. In the example above, the line epel = epel-5-x86_64 implies that epel-5-x86_64 is a yum repo defined under /etc/yum.repos.d that goes something like this:
 
     [epel-5-x86_64]
@@ -126,8 +126,27 @@ V. Usage Examples
     dtmrepo -xug
         a useful command for automatic updates via cron
 
-VI. Limitations
+VI. Tips
 
-At the moment, dtmrepo can only sync for the same "type" of Red Hat release. For example, if the dtmrepo server is running RHEL 6 Server then it can only sync Server repos (i.e. not Workstation repos). Of course this restriction does not affect non-Red Hat repos.
+    1. Make sure that all the repo configurations in /etc/yum.repos.d are disabled (enabled=0) except for the self referencing repo mentioned in #2 below.
 
-There's no ISO mounting support yet, unlike mrepo. I don't find it critical for my use.
+    2. To update the dtmrepo server itself, create a self-referencing repo configuration under /etc/yum.repos.d. Example:
+
+        [self-os]
+        name=self-os
+        baseurl=file:///var/dtmrepo/rhel6s-x86_64/os
+        gpgcheck=0
+
+    3. If you are synchronising from a repo that changes frequently you may want to disable http caching in /etc/yum.conf. This allows dtmrepo to immediately detect and sync new packages.
+
+        /etc/yum.conf:
+
+        http_caching=none
+
+VII. Limitations
+
+    1. At the moment, dtmrepo can only sync for the same "type" of Red Hat release. For example, if the dtmrepo server is running RHEL 6 Server then it can only sync Server repos (i.e. not Workstation repos). Of course this restriction does not affect non-Red Hat repos.
+
+    2. dtmrepo has problems dealing with broken downloads. If your internet connection is faulty and packages are not downloaded completely then the repodata generation may fail. The only way to fix this is to perform another fetch (dtmrepo -u) hoping that the packages will download completely this time. I have encountered instances where because of our pathetic internet link, the downloaded packages are zero-byte files.
+
+    3. There's no ISO mounting support yet, unlike mrepo. I don't find it critical for my use.
