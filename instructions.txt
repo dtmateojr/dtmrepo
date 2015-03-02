@@ -22,6 +22,7 @@ You may now prepare the web server:
 
 yum -y install httpd
 cp httpd-dtmrepo.conf /etc/httpd/conf.d
+cd /var/www && ln -s ../dtmrepo
 chkconfig httpd on
 service httpd start
 
