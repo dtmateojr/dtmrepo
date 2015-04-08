@@ -279,13 +279,15 @@ done
 [ "${INITIALISE}" -eq 1 ] && initialise
 
 if [ "${AUTOFIX}" -eq 1 ]; then
-    if [ ! -e "${MASTERREPOCONF}" -o ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" ]; then
+    if [ ! -e "${MASTERREPOCONF}" -o ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" -o -e "${SMREPOCONF}" ]; then
         configure_master_repo
         fix_cert
     fi
 else
     sanity_check
 fi
+
+[ "${UPDATE}" != 1 -a "${GENREPO}" != 1 ] && exit 0
 
 [ "${DISTRO}" != "" ] && DISTROS="${DISTRO//,/ }"
 [ "${REPO}" != "" ] && REPOS="${REPO//,/ }"
