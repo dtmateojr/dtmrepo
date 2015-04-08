@@ -87,9 +87,18 @@ docopy() {
         cd ${SOURCE} || cderror ${SOURCE}
 
         find -type d -exec mkdir -p ${DEST}/{} \;
-        [ $? -ne 0 ] && copyerror
+        if [ $? -ne 0 ]; then
+            cd ${CWD}
+            copyerror
+        fi
+
         find ! -type d -exec \ln -f {} ${DEST}/{} \;
-        [ $? -ne 0 ] && copyerror
+        if [ $? -ne 0 ]; then
+            cd ${CWD}
+            copyerror
+        fi
+
+        cd ${CWD}
     else
         \ln -f ${SOURCE} ${DEST}
     fi
@@ -97,7 +106,19 @@ docopy() {
 
 [ $# -lt 2 ] && usage
 
-SOURCE=$1
-DEST=$2
+if [ $# -gt 2 ]; then
+    eval LASTARG=\$$#
 
-docopy ${SOURCE} ${DEST}
+    if [ "$(stat -c %F ${LASTARG})" != "directory" ]; then
+        echo "$LASTARG must be a directory."
+        exit 1
+    fi
+
+    while [ "$#" -gt 1 ]; do
+        docopy $1 ${LASTARG}
+        shift
+    done
+else
+    docopy $1 $2
+fi
+
