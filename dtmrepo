@@ -140,6 +140,7 @@ update_repo() {
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
+    yum --disablerepo=* --enablerepo=${_REPOID} clean metadata
     reposync ${_QUIET} ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
     ) 1001> ${_LOCKFILE}
 }
