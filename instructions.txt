@@ -77,7 +77,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     gpgcheck=1
     gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-5
 
-    Note that the repo need not be (and ideally should not be) enabled on the dtmrepo server. Setting enabled=0 will avoid dtmrepo from dying due to improperly configured repositories.
+    Note that the repo need not be (and ideally should not be) enabled on the dtmrepo server. Setting enabled=0 will avoid dtmrepo from dying due to improperly configured repositories. Enabling a repo for a version of RHEL that is higher than what the dtmrepo server is running on could also inadvertently perform a complete distro upgrade when yum is executed on the dtmrepo server itself.
 
     The second type of repoid is not a real repository but just a collection of packages stored in a directory somewhere. This is specified by the identifier local:. In the example, /var/dtmrepo/foo/el5/x86_64 need not contain a repodata. The disadvantage of using this kind of repoid is that dtmrepo would always sync everything in the source directory. It means that the keep option is totally ignored for this repo (other repos in the same distro are not affected).
 
