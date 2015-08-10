@@ -42,6 +42,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     confdir = /etc/dtmrepo.conf.d
     keep = 3
     arch = x86_64
+    protect = java,firefox
     subscribed = 1
 
     At the moment there is just one section called [global]. This section is required.
@@ -49,6 +50,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
         confdir -- this is where distro specific configuration files are located
         keep -- the number of package versions to keep. This is probably the most sought-after feature that is missing in mrepo.
         arch -- default distro architecture. This can be overridden in the individual distro configuration files defined under confdir.
+        protect -- comma separated list of package patterns that will not be deleted even if they are old; patterns are compatible with grep
         subscribed -- the system is subscribed and wants to sync from Red Hat
     /etc/dtmrepo.conf.d
 

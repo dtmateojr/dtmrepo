@@ -151,9 +151,14 @@ gen_repodata() {
     _DISTRO=$3
     _FORCE="-C --update"
     _VERBOSE=""
+    _PROTECT=" "
 
     [ "${FORCE}" -eq 1 ] && _FORCE=" "
     [ "${VERBOSE}" -eq 1 ] && _VERBOSE="-v"
+
+    if [ "${protect}X" != "X" ]; then
+        _PROTECT="$(echo ${protect} | sed -r 's/[ ,]+/|/g')"
+    fi
 
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/$_DISTRO/$_REPODIR"
@@ -170,7 +175,7 @@ gen_repodata() {
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     else
-        repomanage -c -o -k ${keep} ${_DESTDIR} | xargs rm -f
+        repomanage -c -o -k ${keep} ${_DESTDIR} | egrep -v "${_PROTECT}" | xargs rm -f
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     fi
     ) 1001> ${_LOCKFILE}
