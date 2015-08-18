@@ -303,9 +303,13 @@ done
 [ "${INITIALISE}" -eq 1 ] && initialise
 
 if [ "${AUTOFIX}" -eq 1 ]; then
-    if [ ! -e "${MASTERREPOCONF}" -o ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" -o -e "${SMREPOCONF}" ]; then
-        configure_master_repo
-        fix_cert
+    if [ "${subscribed}" -eq 1 ]; then
+        if [ ! -e "${MASTERREPOCONF}" -o ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" -o -e "${SMREPOCONF}" ]; then
+            configure_master_repo
+            fix_cert
+        fi
+
+        [ "${REPOSDIR}X" != "X" ] && ln -sf ${MASTERREPOCONF} ${REPOSDIR}/${MASTERREPO}
     fi
 else
     sanity_check
