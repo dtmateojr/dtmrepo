@@ -3,6 +3,8 @@
 CONFIG=/etc/dtmrepo.conf
 eval `dtmrepo-globalconf $CONFIG`
 
+REPOSDIR=`grep reposdir ${yumconf} | sed -r 's/ +//g' | cut -d= -f2`
+
 LOCKDIR="/var/lock"
 LOCKWAIT=30
 
@@ -20,8 +22,11 @@ AUTOFIX=0
 
 SSLCLIENTKEY="/etc/pki/entitlement/sm-key"
 SSLCLIENTCERT="/etc/pki/entitlement/sm-cert"
-SMREPOCONF="/etc/yum.repos.d/redhat.repo"
-MASTERREPOCONF="/etc/yum.repos.d/master.repo"
+YUMREPOSDIR="/etc/yum.repos.d"
+REDHATREPO="redhat.repo"
+MASTERREPO="master.repo"
+SMREPOCONF="${YUMREPOSDIR}/${REDHATREPO}"
+MASTERREPOCONF="${YUMREPOSDIR}/${MASTERREPO}"
 ISREGISTERED="Current"
 
 LOCALMARKER="local:"
@@ -58,6 +63,8 @@ configure_master_repo() {
     \mv ${SMREPOCONF} ${MASTERREPOCONF}
     subscription-manager config --rhsm.manage_repos=0
     sed -ri 's/enabled *= *1/enabled = 0/' ${MASTERREPOCONF}
+
+    [ "${REPOSDIR}X" != "X" ] && ln -sf ${MASTERREPOCONF} ${REPOSDIR}/${MASTERREPO}
 }
 
 sanity_check() {
@@ -65,7 +72,10 @@ sanity_check() {
     REPOERROR=0
     CERTERROR=0
 
-    if [ "${subscribed}" -eq 1 ]; then
+    if [ "${subscribed}" -ne 1 ]; then
+        [ -e ${REPOSDIR}/${MASTERREPO} ] && \rm ${REPOSDIR}/${MASTERREPO}
+
+    else
         SMSTATUS=$(subscription-manager status|grep 'Overall Status'|awk '{print $NF}')
         [ "${SMSTATUS}" != "${ISREGISTERED}" ] && SUBSERROR=1
         [  ! -e "${MASTERREPOCONF}" ] && REPOERROR=1
@@ -82,6 +92,11 @@ sanity_check() {
 }
 
 initialise() {
+    if [ "${subscribed}" -ne 1 ]; then
+        echo "The configuration is not set to subscribe to Red Hat. Nothing to do here. Set the \"subscribed\" option in ${CONFIG} otherwise you are good to go."
+        return 0
+    fi
+
     SMSTATUS=$(subscription-manager status|grep 'Overall Status'|awk '{print $NF}')
     if [ "${SMSTATUS}" != "${ISREGISTERED}" ]; then
         read -p "Red Hat username: " USERNAME
@@ -117,12 +132,15 @@ update_repo() {
     _SYNCALL="-n"
     _QUIET="-q"
     _VERBOSE=""
+    _YUMCONF=""
 
     if [ "${VERBOSE}" -eq 1 ]; then
         _VERBOSE="-v"
         _QUIET=""
     fi
     [ "${SYNCALL}" -eq 1 ] && _SYNCALL=""
+
+    [ "${yumconf}X" != "X" ] && _YUMCONF="-c ${yumconf}"
 
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
@@ -140,8 +158,8 @@ update_repo() {
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
-    yum --disablerepo=* --enablerepo=${_REPOID} clean metadata
-    reposync ${_QUIET} ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
+    yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata
+    reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
     ) 1001> ${_LOCKFILE}
 }
 

@@ -16,7 +16,9 @@ cp dtmrepo dtmrepo-globalconf dtmrepo-repoconf /usr/local/sbin
 chmod +x /usr/local/sbin/dtmrepo*
 cp dtmrepo.conf /etc
 mkdir /etc/dtmrepo.conf.d
+mkdir /etc/dtmrepo.repos.d
 mkdir /var/dtmrepo
+cp dtmrepo-yum.conf /etc/dtmrepo.repos.d
 
 You may now prepare the web server:
 
@@ -40,6 +42,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     [global]
     rootdir = /var/dtmrepo
     confdir = /etc/dtmrepo.conf.d
+    yumconf = /etc/dtmrepo.repos.d/dtmrepo-yum.conf
     keep = 3
     arch = x86_64
     protect = java,firefox
@@ -48,11 +51,25 @@ This will register and initialise dtmrepo. During registration it will ask for y
     At the moment there is just one section called [global]. This section is required.
         rootdir – this is the where packages are stored. Each distro will have its own subdirectory.
         confdir -- this is where distro specific configuration files are located
+        yumconf -- custom yum configuration for dtmrepo
         keep -- the number of package versions to keep. This is probably the most sought-after feature that is missing in mrepo.
         arch -- default distro architecture. This can be overridden in the individual distro configuration files defined under confdir.
         protect -- comma separated list of package patterns that will not be deleted even if they are old; patterns are compatible with grep
         subscribed -- the system is subscribed and wants to sync from Red Hat
-    /etc/dtmrepo.conf.d
+
+
+    Sample dtmrepo-yum.conf:
+
+    [main]
+    cachedir=/var/cache/dtmrepo/
+    logfile=/var/log/dtmrepo.log
+    obsoletes=1
+    plugins=1
+    reposdir=/etc/dtmrepo.repos.d
+
+
+
+    The /etc/dtmrepo.conf.d.
 
     This directory contains distro-specific configuration files. The configuration files must have an extension of .conf. The filename defines the distro name. For example, the distro rhel5s-x86_64 will have a configuration file called /etc/dtmrepo.conf.d/rhel5s-x86_64.conf. The distro name also corresponds to the directory /var/dtmrepo/distro where repo packages are saved during synchronisation.
 
@@ -75,11 +92,10 @@ This will register and initialise dtmrepo. During registration it will ask for y
     name=epel-5
     mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=epel-5&arch=x86_64
     failovermethod=priority
-    enabled=0
     gpgcheck=1
     gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-5
 
-    Note that the repo need not be (and ideally should not be) enabled on the dtmrepo server. Setting enabled=0 will avoid dtmrepo from dying due to improperly configured repositories. Enabling a repo for a version of RHEL that is higher than what the dtmrepo server is running on could also inadvertently perform a complete distro upgrade when yum is executed on the dtmrepo server itself.
+    Put the repo configurations under the directory specified in "reposdir" of the custom yum configuration specified in "yumconf" of /etc/dtmrepo.conf.
 
     The second type of repoid is not a real repository but just a collection of packages stored in a directory somewhere. This is specified by the identifier local:. In the example, /var/dtmrepo/foo/el5/x86_64 need not contain a repodata. The disadvantage of using this kind of repoid is that dtmrepo would always sync everything in the source directory. It means that the keep option is totally ignored for this repo (other repos in the same distro are not affected).
 
