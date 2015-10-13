@@ -162,9 +162,18 @@ VI. Tips
 
         http_caching=none
 
-VII. Limitations
+VII. genrepoconfig Tool
 
-    1. At the moment, dtmrepo can only sync for the same "type" of Red Hat release. For example, if the dtmrepo server is running RHEL 6 Server then it can only sync Server repos (i.e. not Workstation repos). Of course this restriction does not affect non-Red Hat repos.
+    This tool is useful for generating repo configuration files for other Red Hat releases. For example, if the dtmrepo server is running EL6 but you want to pull EL5 or EL7 packages as well, you can create repo configs like so:
+
+    genrepoconfig 5 Server x86_64 > /etc/dtmrepo.repos.d/redhat5.repo
+    genrepoconfig 7 Server x86_64 > /etc/dtmrepo.repos.d/redhat7.repo
+
+    From here you can select what repos to sync after creating your custom configs under /etc/dtmrepo.conf.d/.
+
+VIII. Limitations
+
+    1. At the moment, dtmrepo can only sync for the same "type" of Red Hat release. For example, if the dtmrepo server is running RHEL 6 Server then it can only sync Server repos (i.e. RHEL5 and RHEL7 Server but NOT Workstation repos). Of course this restriction does not affect non-Red Hat repos.
 
     2. dtmrepo has problems dealing with broken downloads. If your internet connection is faulty and packages are not downloaded completely then the repodata generation may fail. The only way to fix this is to perform another fetch (dtmrepo -u) hoping that the packages will download completely this time. I have encountered instances where because of our pathetic internet link, the downloaded packages are zero-byte files.
 
