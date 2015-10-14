@@ -1,9 +1,10 @@
 #!/bin/bash
 
 usage() {
-    echo "Usage: $(basename $0) <version> <kind> <arch>"
-    echo "example:"
+    echo "Usage: $(basename $0) <version> <kind> <arch> [reference repo]"
+    echo "examples:"
     echo -e "\t$(basename $0) 5 Server x86_64"
+    echo -e "\t$(basename $0) 5 Server x86_64 /etc/yum.repos.d/redhat.repo"
     exit 1
 }
 
@@ -12,11 +13,13 @@ usage() {
 VERSION=$1
 KIND=$2
 ARCH=$3
-
+REFERENCE=$4
 MASTERREPOCONF="/etc/yum.repos.d/master.repo"
 
+[ "${REFERENCE}X" != "X" ] && MASTERREPOCONF=${REFERENCE}
+
 if [ ! -e ${MASTERREPOCONF} ]; then
-    echo "${MASTERREPOCONF} is missing. No usable base repo configuration file."
+    echo "${MASTERREPOCONF} is missing. No usable reference repo configuration file."
     exit 1
 fi
 
