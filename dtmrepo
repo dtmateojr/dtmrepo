@@ -20,8 +20,7 @@ SYNCALL=0
 INITIALISE=0
 AUTOFIX=0
 
-SSLCLIENTKEY="/etc/pki/entitlement/sm-key"
-SSLCLIENTCERT="/etc/pki/entitlement/sm-cert"
+ENTITLEMENTCERTDIR="/etc/pki/entitlement"
 YUMREPOSDIR="/etc/yum.repos.d"
 REDHATREPO="redhat.repo"
 MASTERREPO="master.repo"
@@ -48,13 +47,8 @@ usage() {
 }
 
 fix_cert() {
-    CWD=$(pwd)
-    \rm ${SSLCLIENTKEY} ${SSLCLIENTCERT} &> /dev/null
-    eval $(egrep 'sslclient(key|cert)' ${MASTERREPOCONF}|sort -u|sed 's/ //g')
-    cd $(dirname ${SSLCLIENTKEY})
-    ln -s $(basename ${sslclientkey}) $(basename ${SSLCLIENTKEY})
-    ln -s $(basename ${sslclientcert}) $(basename ${SSLCLIENTCERT})
-    cd ${CWD}
+    \rm ${ENTITLEMENTCERTDIR}/* &> /dev/null
+    subscription-manager refresh
 }
 
 configure_master_repo() {
@@ -79,12 +73,14 @@ sanity_check() {
         SMSTATUS=$(subscription-manager status|grep 'Overall Status'|awk '{print $NF}')
         [ "${SMSTATUS}" != "${ISREGISTERED}" ] && SUBSERROR=1
         [  ! -e "${MASTERREPOCONF}" ] && REPOERROR=1
-        [ ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" ] && CERTERROR=1
+
+        ls ${ENTITLEMENTCERTDIR}/*.pem &> /dev/null
+        [ "$?" -ne 0 ] && CERTERROR=1
     fi
 
     [ "${SUBSERROR}" -eq 1 ] && echo "Subscription manager is set to active in ${CONFIG} but the system is not registered."
     [ "${REPOERROR}" -eq 1 ] && echo "${MASTERREPOCONF} is missing."
-    [ "${CERTERROR}" -eq 1 ] && echo "Cert symlinks are missing."
+    [ "${CERTERROR}" -eq 1 ] && echo "Entitlement certificate(s) missing."
 
     [ "${SUBSERROR}" -eq 1 -o "${REPOERROR}" -eq 1 -o "${CERTERROR}" -eq 1 ] && exit 1
 
@@ -110,8 +106,6 @@ initialise() {
 
     echo "Preparing master repo configuration."
     configure_master_repo
-    echo "Creating cert symlinks."
-    fix_cert
 }
 
 update_lock_error() {
@@ -304,9 +298,18 @@ done
 
 if [ "${AUTOFIX}" -eq 1 ]; then
     if [ "${subscribed}" -eq 1 ]; then
-        if [ ! -e "${MASTERREPOCONF}" -o ! -e "${SSLCLIENTKEY}" -o ! -e "${SSLCLIENTCERT}" -o -e "${SMREPOCONF}" ]; then
-            configure_master_repo
+        ls ${ENTITLEMENTCERTDIR}/*.pem &> /dev/null
+        if [ "$?" -ne 0 ]; then
             fix_cert
+        fi
+
+        if [ ! -e "${MASTERREPOCONF}" -o -e "${SMREPOCONF}" ]; then
+            TEMPFILE=$(mktemp)
+            NEWCERT=$(find ${ENTITLEMENTCERTDIR} -newer ${TEMPFILE})
+            fix_cert
+            [ "${NEWCERT}X" != "X" ] && echo "New certificate(s) detected: ${NEWCERT}"
+            \rm ${TEMPFILE} &> /dev/null
+            configure_master_repo
         fi
 
         [ "${REPOSDIR}X" != "X" ] && ln -sf ${MASTERREPOCONF} ${REPOSDIR}/${MASTERREPO}
