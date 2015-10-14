@@ -164,10 +164,12 @@ VI. Tips
 
 VII. genrepoconfig Tool
 
-    This tool is useful for generating repo configuration files for other Red Hat releases. For example, if the dtmrepo server is running EL6 but you want to pull EL5 or EL7 packages as well, you can create repo configs like so:
+    This tool is useful for generating repo configuration files for other Red Hat releases. By default, it uses /etc/yum.repos.d/master.repo as reference but you can also pass another repo as a fourth parameter.
+For example, if the dtmrepo server is running EL6 but you want to pull EL5 or EL7 packages as well, you can create repo configs like so:
 
     genrepoconfig 5 Server x86_64 > /etc/dtmrepo.repos.d/redhat5.repo
     genrepoconfig 7 Server x86_64 > /etc/dtmrepo.repos.d/redhat7.repo
+    genrepoconfig 7 Server x86_64 /etc/yum.repos.d/redhat.repo > /etc/dtmrepo.repos.d/redhat7.repo
 
     From here you can select what repos to sync after creating your custom configs under /etc/dtmrepo.conf.d/.
 
