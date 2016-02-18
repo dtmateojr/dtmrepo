@@ -141,14 +141,28 @@ update_repo() {
 
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         _SOURCEDIR=${_REPOID#${LOCALMARKER}}
-        if [ ! -e "${_DESTDIR}" ]; then
-            [ "${_VERBOSE}" != "" ] && echo "Creating symlink for local source ${_SOURCEDIR}"
-            \ln -s ${_SOURCEDIR} ${_DESTDIR}
+        if [ ! -L "${_DESTDIR}" ]; then
+            [ -d "${_DESTDIR}" ] && return 0
+            [ "${_VERBOSE}" != "" ] && echo "Creating symlink for local source ${_SOURCEDIR}."
+            \ln -s ${_SOURCEDIR} ${_DESTDIR} &> /dev/null
+            if [ "$?" -ne 0 ]; then
+                echo "Error creating symlink for local source ${_SOURCEDIR}."
+                return 1
+            fi
+        elif [ ! -e "${_DESTDIR}" ]; then
+            echo "Broken symlink found: ${_DESTDIR}."
+            return 1
         fi
         return
     fi
 
-    [ ! -d "${_DESTDIR}" ] && ( mkdir -p "${_DESTDIR}" || exit 1 )
+    if [ ! -d "${_DESTDIR}" ]; then
+        mkdir -p "${_DESTDIR}" &> /dev/null
+        if [ "$?" -ne 0 ]; then
+            echo "Error creating package repository ${_DESTDIR}."
+            return 1
+        fi
+    fi
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
@@ -176,10 +190,8 @@ gen_repodata() {
     _DESTDIR="${rootdir}/$_DISTRO/$_REPODIR"
 
     if [ ! -d "${_DESTDIR}" ]; then
-        if [ "${VERBOSE}" -eq 1 ]; then
-            echo "${_DESTDIR} for ${_DISTRO} does not exist."
-        fi
-        exit 1
+        echo "Repository directory ${_DESTDIR} for ${_DISTRO} does not exist."
+        return 1
     fi
 
     (
