@@ -19,6 +19,7 @@ FORCE=0
 SYNCALL=0
 INITIALISE=0
 AUTOFIX=0
+PURGE=0
 
 ENTITLEMENTCERTDIR="/etc/pki/entitlement"
 YUMREPOSDIR="/etc/yum.repos.d"
@@ -39,6 +40,7 @@ usage() {
     echo -e "\t-f: force the operation"
     echo -e "\t-g: generate repodata"
     echo -e "\t-i: initialise and register the system"
+    echo -e "\t-p: purge undeclared repo directories"
     echo -e "\t-r: <repo,...>"
     echo -e "\t-u: update"
     echo -e "\t-v: verbose"
@@ -225,7 +227,7 @@ process_distro_repo() {
     if [ "${TDISTRO}" != "" ]; then
         if [ ! -f "${confdir}/${TDISTRO}.conf" ]; then
             echo "${TDISTRO} has no configuration"
-            exit 1
+            return 1
         else
             DISTROLIST="${TDISTRO}.conf"
         fi
@@ -242,6 +244,7 @@ process_distro_repo() {
 
     for DIST in ${DISTROLIST}; do
         eval $(dtmrepo-repoconf ${confdir}/${DIST})
+
         if [ "${#repostore[@]}" -eq 0 ]; then
             if [ "${VERBOSE}" -eq 1 ]; then
                 echo "No repos defined for ${DIST%%\.conf}. Skipping..."
@@ -280,7 +283,7 @@ TDISTRO=""
 OPTERR=1
 OPTIND=1
 
-while getopts 'aifugvxr:d:' opt; do
+while getopts 'aifugvxpr:d:' opt; do
     case "${opt}" in
         a)  SYNCALL=1
             ;;
@@ -299,6 +302,8 @@ while getopts 'aifugvxr:d:' opt; do
         v)  VERBOSE=1
             ;;
         x)  AUTOFIX=1
+            ;;
+        p)  PURGE=1
             ;;
         \?)
             usage
@@ -330,10 +335,35 @@ else
     sanity_check
 fi
 
-[ "${UPDATE}" != 1 -a "${GENREPO}" != 1 ] && exit 0
-
 [ "${DISTRO}" != "" ] && DISTROS="${DISTRO//,/ }"
 [ "${REPO}" != "" ] && REPOS="${REPO//,/ }"
+
+if [ "${PURGE}" == 1 ]; then
+    _DISTROLIST=""
+    if [ -z "${DISTROS}" ]; then
+        _DISTROLIST=$(for i in ${confdir}/*.conf; do basename $i; done)
+    else
+        _DISTROLIST=${DISTROS// /.conf }.conf
+    fi
+    for _DIST in ${_DISTROLIST}; do
+        eval $(dtmrepo-repoconf ${confdir}/${_DIST})
+        _REPOS=$(ls ${rootdir}/${_DIST%%\.conf}/)
+        if [ "${#_REPOS[@]}" != 0 ]; then
+            for _REPO in ${_REPOS}; do
+                _FOUND=0
+                for _ACTIVE in ${repostore[@]}; do
+                    if [ "${_REPO}" == "${_ACTIVE}" ]; then
+                        _FOUND=1
+                        break
+                    fi
+                done
+                [ "${_FOUND}" == 0 ] && \rm -r ${rootdir}/${_DIST%%\.conf}/${_REPO}
+            done
+        fi
+    done
+fi
+
+[ "${UPDATE}" != 1 -a "${GENREPO}" != 1 ] && exit 0
 
 if [ "${DISTROS}" == "" ]; then
     if [ "${REPOS}" == "" ]; then

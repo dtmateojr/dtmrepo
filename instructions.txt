@@ -108,6 +108,7 @@ dtmrepo accepts several commandline options namely:
     -r : comma-separated list of repos to process. If not specified then all repos are processed
     -u : sync packages
     -g : generate repodata
+    -p : purge undeclared repo directories
     -f : force the operation. Normally, dtmrepo will not attempt to generate new repodata if it's newer than any package in the repo.
     -x : autofix. Red Hat subscription-manager automatically updates the subscription certificate. This option automatically updates master.repo with the new cert.
     -i : register and initialise the system. Only relevant if you wish to sync with Red Hat. Use it if the sanity check reports any error. It is smart enough to fix only the errors encountered.
@@ -144,6 +145,12 @@ V. Usage Examples
 
     dtmrepo -xug
         a useful command for automatic updates via cron
+
+    dtmrepo -p -d rhel5s
+        purge all repo directories that are not declared in the rhel5s distro config file
+
+    dtmrepo -p
+        purge all repo directories that are not declared in the distro config files
 
 VI. Tips
 
