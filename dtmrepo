@@ -124,11 +124,13 @@ update_repo() {
     _REPODIR=$1
     _REPOID=$2
     _DISTRO=$3
-    _ARCH=$4
+    _ARCHOPTS="-a $4"
     _SYNCALL="-n"
     _QUIET="-q"
     _VERBOSE=""
     _YUMCONF=""
+
+    echo ${_ARCHOPTS}|grep -q 'i[3-6]86' && _ARCHOPTS=""
 
     if [ "${VERBOSE}" -eq 1 ]; then
         _VERBOSE="-v"
@@ -169,7 +171,7 @@ update_repo() {
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata
-    reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} -a ${_ARCH} -p ${_DESTDIR}
+    reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR}
     ) 1001> ${_LOCKFILE}
 }
 
