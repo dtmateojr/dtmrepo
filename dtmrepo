@@ -1,9 +1,10 @@
 #!/bin/bash
 
 CONFIG=/etc/dtmrepo.conf
-eval `dtmrepo-globalconf $CONFIG`
+eval $(dtmrepo-globalconf $CONFIG)
+ARCH=${arch} KEEP=${keep} PROTECT=${protect}
 
-REPOSDIR=`grep reposdir ${yumconf} | sed -r 's/ +//g' | cut -d= -f2`
+REPOSDIR=$(grep reposdir ${yumconf} | sed -r 's/ +//g' | cut -d= -f2)
 
 LOCKDIR="/var/lock"
 LOCKWAIT=30
@@ -23,17 +24,15 @@ PURGE=0
 
 ENTITLEMENTCERTDIR="/etc/pki/entitlement"
 YUMREPOSDIR="/etc/yum.repos.d"
-REDHATREPO="redhat.repo"
-MASTERREPO="master.repo"
-SMREPOCONF="${YUMREPOSDIR}/${REDHATREPO}"
-MASTERREPOCONF="${YUMREPOSDIR}/${MASTERREPO}"
+RHSMREPO="redhat.repo"
+REDHATREPO="redhat-dtmrepo.repo"
 ISREGISTERED="Current"
 
 LOCALMARKER="local:"
 
 usage() {
     echo
-    echo "Usage: `basename $0` [-adfgiruvx]"
+    echo "Usage: $(basename $0) [-adfgiruvx]"
     echo -e "\t-a: sync all packages in a repo (default: new packages only)."
     echo -e "\t-c: check the system for sanity"
     echo -e "\t-d: <distro,...>"
@@ -53,14 +52,20 @@ fix_cert() {
     subscription-manager refresh
 }
 
-configure_master_repo() {
+configure_redhat_repo() {
     subscription-manager config --rhsm.manage_repos=1
-    yum repolist
-    \mv ${SMREPOCONF} ${MASTERREPOCONF}
+    subscription-manager repos
+    \mv ${YUMREPOSDIR}/${RHSMREPO} ${YUMREPOSDIR}/${REDHATREPO}
     subscription-manager config --rhsm.manage_repos=0
-    sed -ri 's/enabled *= *1/enabled = 0/' ${MASTERREPOCONF}
+    sed -i -e 's/\$releasever/\$YUM0/g' -e 's/\$basearch/\$YUM1/g' ${YUMREPOSDIR}/${REDHATREPO}
+    sed -i 's/enabled *= *1/enabled = 0/' ${YUMREPOSDIR}/${REDHATREPO}
 
-    [ "${REPOSDIR}X" != "X" ] && ln -sf ${MASTERREPOCONF} ${REPOSDIR}/${MASTERREPO}
+    if [ ! -z "${REPOSDIR}" ]; then
+        ln -sf ${YUMREPOSDIR}/${REDHATREPO} ${REPOSDIR}/${REDHATREPO}
+        if [ "$?" -ne 0 ]; then
+            echo "Could not create symlink ${REPOSDIR}/${REDHATREPO}. Aborting."
+        fi
+    fi
 }
 
 sanity_check() {
@@ -69,19 +74,19 @@ sanity_check() {
     CERTERROR=0
 
     if [ "${subscribed}" -ne 1 ]; then
-        [ -e ${REPOSDIR}/${MASTERREPO} ] && \rm ${REPOSDIR}/${MASTERREPO}
+        [ -L ${REPOSDIR}/${REDHATREPO} ] && \rm ${REPOSDIR}/${REDHATREPO}
 
     else
         SMSTATUS=$(subscription-manager status|grep 'Overall Status'|awk '{print $NF}')
         [ "${SMSTATUS}" != "${ISREGISTERED}" ] && SUBSERROR=1
-        [  ! -e "${MASTERREPOCONF}" ] && REPOERROR=1
+        [  ! -e "${YUMREPOSDIR}/${REDHATREPO}" ] && REPOERROR=1
 
         ls ${ENTITLEMENTCERTDIR}/*.pem &> /dev/null
         [ "$?" -ne 0 ] && CERTERROR=1
     fi
 
     [ "${SUBSERROR}" -eq 1 ] && echo "Subscription manager is set to active in ${CONFIG} but the system is not registered."
-    [ "${REPOERROR}" -eq 1 ] && echo "${MASTERREPOCONF} is missing."
+    [ "${REPOERROR}" -eq 1 ] && echo "${YUMREPOSDIR}/${REDHATREPO} is missing."
     [ "${CERTERROR}" -eq 1 ] && echo "Entitlement certificate(s) missing."
 
     [ "${SUBSERROR}" -eq 1 -o "${REPOERROR}" -eq 1 -o "${CERTERROR}" -eq 1 ] && exit 1
@@ -107,7 +112,7 @@ initialise() {
     fi
 
     echo "Preparing master repo configuration."
-    configure_master_repo
+    configure_redhat_repo
 }
 
 update_lock_error() {
@@ -124,13 +129,15 @@ update_repo() {
     _REPODIR=$1
     _REPOID=$2
     _DISTRO=$3
-    _ARCHOPTS="-a $4"
+    _ARCH=$4
+    _ARCHOPTS="-a ${_ARCH}"
+    _RELEASEVER=$5
     _SYNCALL="-n"
     _QUIET="-q"
     _VERBOSE=""
     _YUMCONF=""
 
-    echo ${_ARCHOPTS}|grep -q 'i[3-6]86' && _ARCHOPTS=""
+    echo ${_ARCH}|grep -q 'i[3-6]86' && _ARCHOPTS=""
 
     if [ "${VERBOSE}" -eq 1 ]; then
         _VERBOSE="-v"
@@ -138,7 +145,7 @@ update_repo() {
     fi
     [ "${SYNCALL}" -eq 1 ] && _SYNCALL=""
 
-    [ "${yumconf}X" != "X" ] && _YUMCONF="-c ${yumconf}"
+    [ ! -z "${yumconf}" ] && _YUMCONF="-c ${yumconf}"
 
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
@@ -170,8 +177,8 @@ update_repo() {
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
-    yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata
-    reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR}
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR}
     ) 1001> ${_LOCKFILE}
 }
 
@@ -186,7 +193,7 @@ gen_repodata() {
     [ "${FORCE}" -eq 1 ] && _FORCE=" "
     [ "${VERBOSE}" -eq 1 ] && _VERBOSE="-v"
 
-    if [ "${protect}X" != "X" ]; then
+    if [ ! -z "${protect}" ]; then
         _PROTECT="$(echo ${protect} | sed -r 's/[ ,]+/|/g')"
     fi
 
@@ -213,12 +220,12 @@ gen_repodata() {
 action() {
     if [ "${UPDATE}" -eq 1 ]; then
         [ "${VERBOSE}" -eq 1 ] && echo "Synchronising distro $3 repo $1."
-        update_repo $1 $2 $3 $4
+        update_repo $1 $2 $3 $4 $5
     fi
 
     if [ "${GENREPO}" -eq 1 ]; then
         [ "${VERBOSE}" -eq 1 ] && echo "Generating repodata for distro $3 repo $1."
-        gen_repodata $1 $2 $3
+        gen_repodata $1 $2 $3 
     fi
 }
 
@@ -245,6 +252,9 @@ process_distro_repo() {
     fi
 
     for DIST in ${DISTROLIST}; do
+        unset releasever arch keep protect
+        arch=${ARCH} keep=${KEEP} protect=${PROTECT}
+
         eval $(dtmrepo-repoconf ${confdir}/${DIST})
 
         if [ "${#repostore[@]}" -eq 0 ]; then
@@ -261,13 +271,13 @@ process_distro_repo() {
                     continue
                 else
                     _REPONAME=${reponame[$i]}
-                    action ${TREPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
+                    action ${TREPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever} 
                     break
                 fi
             else
                 _REPO=${repostore[$i]}
                 _REPONAME=${reponame[$i]}
-                action ${_REPO} ${_REPONAME} ${DIST%%\.conf} ${arch}
+                action ${_REPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever}
             fi
         done
     done
@@ -322,16 +332,13 @@ if [ "${AUTOFIX}" -eq 1 ]; then
             fix_cert
         fi
 
-        if [ ! -e "${MASTERREPOCONF}" -o -e "${SMREPOCONF}" ]; then
-            TEMPFILE=$(mktemp)
-            NEWCERT=$(find ${ENTITLEMENTCERTDIR} -newer ${TEMPFILE})
-            fix_cert
-            [ "${NEWCERT}X" != "X" ] && echo "New certificate(s) detected: ${NEWCERT}"
-            \rm ${TEMPFILE} &> /dev/null
-            configure_master_repo
+        _NEWCERT=$(find ${ENTITLEMENTCERTDIR} -newer ${YUMREPOSDIR}/${REDHATREPO} 2>/dev/null)
+        if [ ! -e "${YUMREPOSDIR}/${REDHATREPO}" -o ! -z "${_NEWCERT}" ]; then
+            echo "Updating redhat repo."
+            configure_redhat_repo
         fi
 
-        [ "${REPOSDIR}X" != "X" ] && ln -sf ${MASTERREPOCONF} ${REPOSDIR}/${MASTERREPO}
+        [ ! -z "${REPOSDIR}" -a ! -L "${REPOSDIR}/${REDHATREPO}" ] && ln -sf ${YUMREPOSDIR}/${REDHATREPO} ${REPOSDIR}/${REDHATREPO}
     fi
 else
     sanity_check
@@ -367,8 +374,8 @@ fi
 
 [ "${UPDATE}" != 1 -a "${GENREPO}" != 1 ] && exit 0
 
-if [ "${DISTROS}" == "" ]; then
-    if [ "${REPOS}" == "" ]; then
+if [ -z "${DISTROS}" ]; then
+    if [ -z "${REPOS}" ]; then
         process_distro_repo
     else
         for TREPO in ${REPOS}; do
@@ -377,7 +384,7 @@ if [ "${DISTROS}" == "" ]; then
     fi
 else
     for TDISTRO in ${DISTROS}; do
-        if [ "${REPOS}" == "" ]; then
+        if [ -z "${REPOS}" ]; then
             process_distro_repo
         else
             for TREPO in ${REPOS}; do

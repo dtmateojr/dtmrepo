@@ -14,7 +14,7 @@ VERSION=$1
 KIND=$2
 ARCH=$3
 REFERENCE=$4
-MASTERREPOCONF="/etc/yum.repos.d/master.repo"
+REDHATREPOCONF="/etc/yum.repos.d/redhat-dtmrepo.repo"
 
 [ "${REFERENCE}X" != "X" ] && MASTERREPOCONF=${REFERENCE}
 
