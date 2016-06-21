@@ -1,10 +1,11 @@
 #!/bin/bash
 
 CONFIG=/etc/dtmrepo.conf
-eval $(dtmrepo-globalconf $CONFIG)
+eval $(readconf $CONFIG global)
 ARCH=${arch} KEEP=${keep} PROTECT=${protect}
 
-REPOSDIR=$(grep reposdir ${yumconf} | sed -r 's/ +//g' | cut -d= -f2)
+eval $(readconf ${yumconf} main)
+REPOSDIR=${reposdir}
 
 LOCKDIR="/var/lock"
 LOCKWAIT=30

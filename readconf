@@ -4,12 +4,12 @@ import ConfigParser
 import sys
 
 def usage():
-    sys.stderr.write('Usage: %s <config file>\n\n' % sys.argv[0].split('/')[-1])
+    sys.stderr.write('Usage: %s <config file> <section>\n\n' % sys.argv[0].split('/')[-1])
     sys.exit(1)
 
-def read_conf(config):
+def read_conf(config, section):
     parser = ConfigParser.SafeConfigParser()
-    
+
     try:
         parser.read(config)
     except:
@@ -17,18 +17,18 @@ def read_conf(config):
         sys.exit(1)
 
     try:
-        global_opts = parser.items('global')
+        opts = parser.items(section)
     except:
-        sys.stderr.write('Missing [global] section in %s.\n' % config)
+        sys.stderr.write('Missing section %s in %s.\n' % (section,config))
         sys.exit(1)
 
-    for opt,val in global_opts:
+    for opt,val in opts:
         print '%s=%s' % (opt, val)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         usage()
 
-    read_conf(sys.argv[1])
-    
+    read_conf(sys.argv[1], sys.argv[2])
+
