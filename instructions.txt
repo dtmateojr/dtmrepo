@@ -10,34 +10,29 @@ If you need to sync with Red Hat you will require a valid subscription. You will
 
 II. Installation
 
-"Installation" is easy:
+The syntax for installer.sh is as follows:
+    installer.sh <installation dir> [repo dir] [subscribe]
 
-cp dtmrepo dtmrepo-globalconf dtmrepo-repoconf /usr/local/sbin
-chmod +x /usr/local/sbin/dtmrepo*
-cp dtmrepo.conf /etc
-mkdir /etc/dtmrepo.conf.d
-mkdir /etc/dtmrepo.repos.d
-mkdir /var/dtmrepo
-cp dtmrepo-yum.conf /etc/dtmrepo.repos.d
+Run the installer.sh script and specify the target installation directory, for example:
+    ./installer.sh /usr/local/dtmrepo
 
-You may now prepare the web server:
+Optionally, you could also specify a separate directory where you want dtmrepo to store the packages:
+    ./installer.sh /usr/local/dtmrepo /var/repos
 
-yum -y install httpd
-cp httpd-dtmrepo.conf /etc/httpd/conf.d
-cd /var/www && ln -s ../dtmrepo
-chkconfig httpd on
-service httpd start
+You could also automatically subscribe to Red Hat's subscription manager by passing the "subscribe" parameter:
+    ./installer.sh /usr/local/dtmrepo /var/repos subscribe
+
+The last example will run "dtmrepo -i" as described in the Configuration section below.
 
 III. Configuration
 
-If you wish to synchronise Red Hat packages, make sure that your dtmrepo server is registered and subscribed. Using the default dtmrepo.conf, perform the following:
+If you wish to synchronise Red Hat packages, make sure that your dtmrepo server is registered and subscribed. Set "subscribed = 1" in dtmrepo.conf then perform the following:
 
     dtmrepo -i
 
-This will register and initialise dtmrepo. During registration it will ask for your Red Hat credentials and attempt to subscribe your system using subscription-manager. It will also configure /etc/rhsm/rhsm.conf such that dtmrepo will internally manage the repositories defined under /etc/yum.repos.d. Once the initialisation is finished you may add other repos (e.g. epel) that you want to sync in a separate .repo file in /etc/yum.repos.d.
+This will register and initialise dtmrepo. During registration it will ask for your Red Hat credentials and attempt to subscribe your system using subscription-manager. It will also configure /etc/rhsm/rhsm.conf such that dtmrepo will internally manage the yum repository configuration files.
 
-
-    The main configuration file for dtmrepo is /etc/dtmrepo.conf. Below are the default settings:
+    The main configuration file for dtmrepo is INSTALLDIR/etc/dtmrepo.conf. Sample settings:
 
     [global]
     rootdir = /var/dtmrepo
@@ -45,17 +40,17 @@ This will register and initialise dtmrepo. During registration it will ask for y
     yumconf = /etc/dtmrepo.repos.d/dtmrepo-yum.conf
     keep = 3
     arch = x86_64
-    protect = java,firefox
     subscribed = 1
+    protect = java,firefox
 
     At the moment there is just one section called [global]. This section is required.
         rootdir – this is the where packages are stored. Each distro will have its own subdirectory.
         confdir -- this is where distro specific configuration files are located
         yumconf -- custom yum configuration for dtmrepo
-        keep -- the number of package versions to keep. This is probably the most sought-after feature that is missing in mrepo.
+        keep -- the number of package versions to keep. Setting "keep = 0" keeps all versions. This is probably the most sought-after feature that is missing in mrepo.
         arch -- default distro architecture. This can be overridden in the individual distro configuration files defined under confdir.
-        protect -- comma separated list of package patterns that will not be deleted even if they are old; patterns are compatible with grep
         subscribed -- the system is subscribed and wants to sync from Red Hat
+        protect -- comma separated list of package patterns that will not be deleted even if they are old; patterns are compatible with grep
 
 
     Sample dtmrepo-yum.conf:
@@ -68,10 +63,9 @@ This will register and initialise dtmrepo. During registration it will ask for y
     reposdir=/etc/dtmrepo.repos.d
 
 
+    The INSTALLDIR/etc/dtmrepo.conf.d directory
 
-    The /etc/dtmrepo.conf.d/
-
-    This directory contains distro-specific configuration files. The configuration files must have an extension of .conf. The filename defines the distro name. For example, the distro rhel5s-x86_64 will have a configuration file called /etc/dtmrepo.conf.d/rhel5s-x86_64.conf. The distro name also corresponds to the directory /var/dtmrepo/distro where repo packages are saved during synchronisation.
+    This directory contains distro-specific configuration files. The configuration files must have an extension of .conf. The filename defines the distro name. For example, the distro rhel5s-x86_64 will have a configuration file called INSTALLDIR/etc/dtmrepo.conf.d/rhel5s-x86_64.conf. The distro name also corresponds to the directory REPODIR/distro where repo packages are saved during synchronisation.
 
     Below is a sample distro.conf configuration file:
     [control]
@@ -86,11 +80,11 @@ This will register and initialise dtmrepo. During registration it will ask for y
     epel = epel-5-x86_64
     foo = local:/var/dtmrepo/foo/el5/x86_64
 
-    There are two sections: [control] and [repos]. The [control] section may override some of the global configuration options. In the example above it overrides the the number of package versions to keep. The [repos] section defines the different repositories that will be synced. The format is "targetdir = repoid". The targetdir corresponds to the directory /var/dtmrepo/rhel5s-x86_64/targetdir and repoid is a real yum repository that is preconfigured under /etc/dtmrepo.repos.d/.
+    There are two sections: [control] and [repos]. The [control] section may override some of the global configuration options. In the example above it overrides the the number of package versions to keep. The [repos] section defines the different repositories that will be synced. The format is "targetdir = repoid". The targetdir corresponds to the directory REPDODIR/rhel5s-x86_64/targetdir and repoid is a real yum repository that is preconfigured under INSTALLDIR/etc/dtmrepo.repos.d/.
 
     IMPORTANT: For all distros that rely on Red Hat subscription-manager, the "releasever" and "arch" variables NEED to be defined.
 
-    At the moment there are two types of repoid that is accepted by dtmrepo. The first type is the most common where the repoid is a real yum repo. In the example above, the line epel = epel-5-x86_64 implies that epel-5-x86_64 is a yum repo defined under /etc/dtmrepo.repos.d/ like this:
+    At the moment there are two types of repoid that is accepted by dtmrepo. The first type is the most common where the repoid is a real yum repo. In the example above, the line epel = epel-5-x86_64 implies that epel-5-x86_64 is a yum repo defined under INSTALLDIR/etc/dtmrepo.repos.d/ like this:
 
     [epel-5-x86_64]
     name=epel-5
@@ -99,9 +93,9 @@ This will register and initialise dtmrepo. During registration it will ask for y
     gpgcheck=1
     gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-5
 
-    Put the repo configurations under the directory specified in "reposdir" of the custom yum configuration specified in "yumconf" of /etc/dtmrepo.conf.
+    Put the repo configurations under the directory specified in "reposdir" of the custom yum configuration specified in "yumconf" of INSTALLDIR/etc/dtmrepo.conf.
 
-    The second type of repoid is not a real repository but just a collection of packages stored in a directory somewhere. This is specified by the identifier local:. In the example, /var/dtmrepo/foo/el5/x86_64 need not contain a repodata.If the directory already exists where it's supposed to be under repodata (i.e. /var/dtmrepo/rhel5s-x86_64/foo) then it is left untouched otherwise a symlink that points to the source directory is created under the said repodata.
+    The second type of repoid is not a real repository but just a collection of packages stored in a directory somewhere. This is specified by the identifier local:. In the example above, /var/dtmrepo/foo/el5/x86_64 need not contain a repodata. If the directory already exists where it's supposed to be under repodata (i.e. /var/dtmrepo/rhel5s-x86_64/foo) then it is left untouched otherwise a symlink that points to the source directory is created under the said repodata.
 
 IV. Usage
 
@@ -167,16 +161,13 @@ VI. Tips
         baseurl=file:///var/dtmrepo/rhel6s-x86_64/os
         gpgcheck=0
 
-    3. If you are synchronising from a repo that changes frequently you may want to disable http caching in /etc/yum.conf. This allows dtmrepo to immediately detect and sync new packages.
-
-        /etc/yum.conf:
+    3. If you are synchronising from a repo that changes frequently you may want to disable http caching in INSTALLDIR/etc/dtmrepo.repos.d/dtmrepo-yum.conf. This allows dtmrepo to immediately detect and sync new packages.
 
         http_caching=none
 
 VII. genrepoconfig Tool
 
-    This tool is useful for generating repo configuration files for other Red Hat releases. By default, it uses /etc/yum.repos.d/redhat-dtmrepo.repo as reference but you can also pass another repo as a fourth parameter.
-For example, if the dtmrepo server is running EL6 but you want to pull EL5 or EL7 packages as well, you can create repo configs like so:
+    This tool is useful for generating repo configuration files for other Red Hat releases. By default, it uses INSTALLDIR/etc/dtmrepo.repos.d/redhat-dtmrepo.repo as reference but you can also pass another repo as a fourth parameter. For example, if the dtmrepo server is running EL6 but you want to pull EL5 or EL7 packages as well, you can create repo configs like so:
 
     genrepoconfig 5 Server x86_64 > /etc/dtmrepo.repos.d/redhat5.repo
     genrepoconfig 7 Server x86_64 > /etc/dtmrepo.repos.d/redhat7.repo

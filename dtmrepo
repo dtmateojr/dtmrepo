@@ -1,6 +1,9 @@
 #!/bin/bash
 
-CONFIG=/etc/dtmrepo.conf
+INSTALLDIR=/path/to/dtmrepo/installdir
+export PATH=${INSTALLDIR}/bin:${PATH}
+
+CONFIG=${INSTALLDIR}/etc/dtmrepo.conf
 eval $(readconf $CONFIG global)
 ARCH=${arch} KEEP=${keep} PROTECT=${protect}
 
@@ -9,10 +12,6 @@ REPOSDIR=${reposdir}
 
 LOCKDIR="/var/lock"
 LOCKWAIT=30
-
-LOGDIR='/var/log/dtmrepo'
-LOGFILE="${LOGDIR}/dtmrepo.log"
-[ ! -d "${LOGDIR}" ] && ( mkdir -p ${LOGDIR} || exit 1 )
 
 UPDATE=0
 GENREPO=0
@@ -33,7 +32,7 @@ LOCALMARKER="local:"
 
 usage() {
     echo
-    echo "Usage: $(basename $0) [-adfgiruvx]"
+    echo "Usage: $(basename $0) [-adfgipruvx]"
     echo -e "\t-a: sync all packages in a repo (default: new packages only)."
     echo -e "\t-c: check the system for sanity"
     echo -e "\t-d: <distro,...>"
@@ -178,8 +177,8 @@ update_repo() {
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
-    YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata
-    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR}
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath
     ) 1001> ${_LOCKFILE}
 }
 
@@ -226,7 +225,7 @@ action() {
 
     if [ "${GENREPO}" -eq 1 ]; then
         [ "${VERBOSE}" -eq 1 ] && echo "Generating repodata for distro $3 repo $1."
-        gen_repodata $1 $2 $3 
+        gen_repodata $1 $2 $3
     fi
 }
 
@@ -272,7 +271,7 @@ process_distro_repo() {
                     continue
                 else
                     _REPONAME=${reponame[$i]}
-                    action ${TREPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever} 
+                    action ${TREPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever}
                     break
                 fi
             else
@@ -295,6 +294,8 @@ DISTROS=""
 TDISTRO=""
 OPTERR=1
 OPTIND=1
+
+unset http_proxy https_proxy ftp_proxy
 
 while getopts 'aifugvxpr:d:' opt; do
     case "${opt}" in
