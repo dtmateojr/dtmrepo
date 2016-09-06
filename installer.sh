@@ -5,7 +5,7 @@ REPODIR=$2
 SUBSCRIBE=$3
 
 if [ -z "$INSTALLDIR" ]; then
-    echo "Usage: $(basename $0) <installation dir> [repo dir]"
+    echo "Usage: $(basename $0) <installation dir> [repo dir] [subscribe]"
     exit 1
 fi
 
@@ -42,7 +42,12 @@ plugins = 1
 reposdir = $INSTALLDIR/etc/dtmrepo.repos.d
 EOF
 
-yum -y install httpd
+rpm -q --quiet httpd || yum -y install httpd
+if [ "$?" -ne 0 ]; then
+    echo "Error installing httpd."
+    exit 1
+fi
+
 \cp httpd-dtmrepo.conf /etc/httpd/conf.d/dtmrepo.conf
 ln -sf $REPODIR /var/www/dtmrepo
 chkconfig httpd on
