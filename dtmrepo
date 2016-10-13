@@ -5,7 +5,7 @@ export PATH=${INSTALLDIR}/bin:${PATH}
 
 CONFIG=${INSTALLDIR}/etc/dtmrepo.conf
 eval $(readconf $CONFIG global)
-ARCH=${arch} KEEP=${keep} PROTECT=${protect}
+ARCH=${arch} KEEP=${keep} PROTECT=${protect} PROTECTREPO=${protectrepo}
 
 eval $(readconf ${yumconf} main)
 REPOSDIR=${reposdir}
@@ -189,12 +189,17 @@ gen_repodata() {
     _FORCE="-C --update"
     _VERBOSE=""
     _PROTECT=" "
+    _PROTECTREPO=0
 
     [ "${FORCE}" -eq 1 ] && _FORCE=" "
     [ "${VERBOSE}" -eq 1 ] && _VERBOSE="-v"
 
     if [ ! -z "${protect}" ]; then
         _PROTECT="$(echo ${protect} | sed -r 's/[ ,]+/|/g')"
+    fi
+    
+    if [ ! -z "${protectrepo}" ]; then
+        echo ${_REPOID} | egrep -q "$(echo ${protectrepo} | sed -r 's/[ ,]+/|/g')" && _PROTECTREPO=1
     fi
 
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
@@ -207,7 +212,7 @@ gen_repodata() {
 
     (
     flock -w ${LOCKWAIT} 1001 || genrepo_lock_error ${_DESTDIR}
-    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
+    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" -o "${_PROTECTREPO}" -eq 1 ]; then
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     else
         repomanage -c -o -k ${keep} ${_DESTDIR} | egrep -v "${_PROTECT}" | xargs rm -f
@@ -252,8 +257,8 @@ process_distro_repo() {
     fi
 
     for DIST in ${DISTROLIST}; do
-        unset releasever arch keep protect
-        arch=${ARCH} keep=${KEEP} protect=${PROTECT}
+        unset releasever arch keep protect protectrepo
+        arch=${ARCH} keep=${KEEP} protect=${PROTECT} protectrepo=${PROTECTREPO}
 
         eval $(dtmrepo-repoconf ${confdir}/${DIST})
 
