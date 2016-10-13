@@ -42,6 +42,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     arch = x86_64
     subscribed = 1
     protect = java,firefox
+    protectrepo = myrepo,foo*
 
     At the moment there is just one section called [global]. This section is required.
         rootdir – this is the where packages are stored. Each distro will have its own subdirectory.
@@ -51,7 +52,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
         arch -- default distro architecture. This can be overridden in the individual distro configuration files defined under confdir.
         subscribed -- the system is subscribed and wants to sync from Red Hat
         protect -- comma separated list of package patterns that will not be deleted even if they are old; patterns are compatible with grep
-
+        protectrepo -- comma separated list of repo patterns to protect. All packages in the matching repos will be kept. Patterns are compatible with grep.
 
     Sample dtmrepo-yum.conf:
 
@@ -72,6 +73,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     releasever = 5Server
     arch = x86_64
     keep = 2
+    protectrepo = os,optional
 
     [repos]
     os = rhel-5-server-rpms
