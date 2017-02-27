@@ -18,6 +18,7 @@ GENREPO=0
 VERBOSE=0
 FORCE=0
 SYNCALL=0
+SELECT=0
 INITIALISE=0
 AUTOFIX=0
 PURGE=0
@@ -32,7 +33,7 @@ LOCALMARKER="local:"
 
 usage() {
     echo
-    echo "Usage: $(basename $0) [-adfgipruvx]"
+    echo "Usage: $(basename $0) [-adfgiprsuvx]"
     echo -e "\t-a: sync all packages in a repo (default: new packages only)."
     echo -e "\t-c: check the system for sanity"
     echo -e "\t-d: <distro,...>"
@@ -41,6 +42,7 @@ usage() {
     echo -e "\t-i: initialise and register the system"
     echo -e "\t-p: purge undeclared repo directories"
     echo -e "\t-r: <repo,...>"
+    echo -e "\t-s: <pkg,...>"
     echo -e "\t-u: update"
     echo -e "\t-v: verbose"
     echo -e "\t-x: automatically fix subscription problems"
@@ -58,7 +60,6 @@ configure_redhat_repo() {
     \mv ${YUMREPOSDIR}/${RHSMREPO} ${YUMREPOSDIR}/${REDHATREPO}
     subscription-manager config --rhsm.manage_repos=0
     sed -i -e 's/\$releasever/\$YUM0/g' -e 's/\$basearch/\$YUM1/g' ${YUMREPOSDIR}/${REDHATREPO}
-    sed -i 's/enabled *= *1/enabled = 0/' ${YUMREPOSDIR}/${REDHATREPO}
 
     if [ ! -z "${REPOSDIR}" ]; then
         ln -sf ${YUMREPOSDIR}/${REDHATREPO} ${REPOSDIR}/${REDHATREPO}
@@ -178,8 +179,54 @@ update_repo() {
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
-    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l -m --download-metadata 
     ) 1001> ${_LOCKFILE}
+}
+
+download_package() {
+    _REPODIR=$1
+    _REPOID=$2
+    _DISTRO=$3
+    _ARCH=$4
+    _RELEASEVER=$5
+    _PACKAGES="${6/,/ }"
+    _QUIET="-q"
+    _VERBOSE=""
+    _YUMCONF=""
+
+    echo ${_ARCH}|grep -q 'i[3-6]86' && _ARCHOPTS=""
+
+    if [ "${VERBOSE}" -eq 1 ]; then
+        _VERBOSE="-v"
+        _QUIET=""
+    fi
+
+    [ ! -z "${yumconf}" ] && _YUMCONF="-c ${yumconf}"
+
+    _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
+    _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
+
+    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
+        if [ "${VERBOSE}" -eq 1 ]; then
+            echo "Package select option not applicable to local repos."
+	fi
+        return
+    fi
+
+    if [ ! -d "${_DESTDIR}" ]; then
+        mkdir -p "${_DESTDIR}" &> /dev/null
+        if [ "$?" -ne 0 ]; then
+            echo "Error creating package repository ${_DESTDIR}."
+            return 1
+        fi
+    fi
+
+    (
+    flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} repotrack ${_QUIET} ${_YUMCONF} -r ${_REPOID} -p ${_DESTDIR} ${_PACKAGES}
+    ) 1001> ${_LOCKFILE}
+
 }
 
 gen_repodata() {
@@ -197,8 +244,10 @@ gen_repodata() {
     if [ ! -z "${protect}" ]; then
         _PROTECT="$(echo ${protect} | sed -r 's/[ ,]+/|/g')"
     fi
-    
-    if [ ! -z "${protectrepo}" ]; then
+
+    if [ "${SELECT}" -eq 1 ]; then
+        _PROTECTREPO=1
+    elif [ ! -z "${protectrepo}" ]; then
         echo ${_REPOID} | egrep -q "$(echo ${protectrepo} | sed -r 's/[ ,]+/|/g')" && _PROTECTREPO=1
     fi
 
@@ -223,6 +272,11 @@ gen_repodata() {
 }
 
 action() {
+    if [ "${SELECT}" -eq 1 ]; then
+        [ "${VERBOSE}" -eq 1 ] && echo "Downloading packages $6."
+        download_package $1 $2 $3 $4 $5 $6
+    fi
+
     if [ "${UPDATE}" -eq 1 ]; then
         [ "${VERBOSE}" -eq 1 ] && echo "Synchronising distro $3 repo $1."
         update_repo $1 $2 $3 $4 $5
@@ -276,13 +330,13 @@ process_distro_repo() {
                     continue
                 else
                     _REPONAME=${reponame[$i]}
-                    action ${TREPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever}
+                    action ${TREPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever} ${PACKAGE}
                     break
                 fi
             else
                 _REPO=${repostore[$i]}
                 _REPONAME=${reponame[$i]}
-                action ${_REPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever}
+                action ${_REPO} ${_REPONAME} ${DIST%%\.conf} ${arch} ${releasever} ${PACKAGE}
             fi
         done
     done
@@ -297,12 +351,13 @@ TREPO=""
 DISTRO=""
 DISTROS=""
 TDISTRO=""
+PACKAGE=""
 OPTERR=1
 OPTIND=1
 
 unset http_proxy https_proxy ftp_proxy
 
-while getopts 'aifugvxpr:d:' opt; do
+while getopts 'aifugvxpr:d:s:' opt; do
     case "${opt}" in
         a)  SYNCALL=1
             ;;
@@ -310,13 +365,17 @@ while getopts 'aifugvxpr:d:' opt; do
             ;;
         f)  FORCE=1
             ;;
-        u)  UPDATE=1
+        u)  [ "${SELECT}" -eq 0 ] && UPDATE=1
             ;;
         g)  GENREPO=1
             ;;
         r)  REPO=${OPTARG}
             ;;
         d)  DISTRO=${OPTARG}
+            ;;
+        s)  PACKAGE=${OPTARG}
+            SELECT=1
+            UPDATE=0
             ;;
         v)  VERBOSE=1
             ;;
@@ -350,6 +409,7 @@ if [ "${AUTOFIX}" -eq 1 ]; then
 else
     sanity_check
 fi
+yum-config-manager -c ${yumconf} --disable \* &> /dev/null
 
 [ "${DISTRO}" != "" ] && DISTROS="${DISTRO//,/ }"
 [ "${REPO}" != "" ] && REPOS="${REPO//,/ }"
@@ -379,7 +439,7 @@ if [ "${PURGE}" == 1 ]; then
     done
 fi
 
-[ "${UPDATE}" != 1 -a "${GENREPO}" != 1 ] && exit 0
+[ "${UPDATE}" != 1 -a "${GENREPO}" != 1 -a "${SELECT}" != 1 ] && exit 0
 
 if [ -z "${DISTROS}" ]; then
     if [ -z "${REPOS}" ]; then
