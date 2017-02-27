@@ -37,12 +37,12 @@ This will register and initialise dtmrepo. During registration it will ask for y
     [global]
     rootdir = /var/dtmrepo
     confdir = /etc/dtmrepo.conf.d
-    yumconf = /etc/dtmrepo.repos.d/dtmrepo-yum.conf
+    yumconf = /etc/dtmrepo-yum.conf
     keep = 3
     arch = x86_64
     subscribed = 1
     protect = java,firefox
-    protectrepo = myrepo,foo*
+    protectrepo = myrepo,foo*
 
     At the moment there is just one section called [global]. This section is required.
         rootdir – this is the where packages are stored. Each distro will have its own subdirectory.
@@ -52,7 +52,8 @@ This will register and initialise dtmrepo. During registration it will ask for y
         arch -- default distro architecture. This can be overridden in the individual distro configuration files defined under confdir.
         subscribed -- the system is subscribed and wants to sync from Red Hat
         protect -- comma separated list of package patterns that will not be deleted even if they are old; patterns are compatible with grep
-        protectrepo -- comma separated list of repo patterns to protect. All packages in the matching repos will be kept. Patterns are compatible with grep.
+        protectrepo -- comma separated list of repo patterns to protect. All packages in the matching repos will be kept. Patterns are compatible with grep.
+
 
     Sample dtmrepo-yum.conf:
 
@@ -108,6 +109,7 @@ dtmrepo accepts several commandline options namely:
     -r : comma-separated list of repos to process. If not specified then all repos are processed
     -u : sync packages
     -g : generate repodata
+    -s : download selected packages and all dependencies. This option disables -u and temporarily protects the entire repo so that the packages are not deleted during repodata creation. Has no effect on "local:" repos.
     -p : purge undeclared repo directories
     -f : force the operation. Normally, dtmrepo will not attempt to generate new repodata if it's newer than any package in the repo.
     -x : autofix. Red Hat subscription-manager automatically updates the subscription certificate. This option automatically updates master.repo with the new cert.
@@ -133,6 +135,9 @@ V. Usage Examples
 
     dtmrepo -u -r foo,bar
         sync foo and bar repos on all distros
+
+    dtmrepo -s foo,bar -r foobar
+        download packages foo and bar including all their dependencies from repo foobar
 
     dtmrepo -u -d rhel5s
         sync only the rhel5s distro
@@ -163,7 +168,7 @@ VI. Tips
         baseurl=file:///var/dtmrepo/rhel6s-x86_64/os
         gpgcheck=0
 
-    3. If you are synchronising from a repo that changes frequently you may want to disable http caching in INSTALLDIR/etc/dtmrepo.repos.d/dtmrepo-yum.conf. This allows dtmrepo to immediately detect and sync new packages.
+    3. If you are synchronising from a repo that changes frequently you may want to disable http caching in INSTALLDIR/etc/dtmrepo-yum.conf. This allows dtmrepo to immediately detect and sync new packages.
 
         http_caching=none
 

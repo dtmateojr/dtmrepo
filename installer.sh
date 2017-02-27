@@ -27,13 +27,13 @@ cat <<EOF > $INSTALLDIR/etc/dtmrepo.conf
 [global]
 rootdir = $REPODIR
 confdir = $INSTALLDIR/etc/dtmrepo.conf.d
-yumconf = $INSTALLDIR/etc/dtmrepo.repos.d/dtmrepo-yum.conf
+yumconf = $INSTALLDIR/etc/dtmrepo-yum.conf
 keep = 3
 arch = x86_64
 subscribed = 0
 EOF
 
-cat <<EOF > $INSTALLDIR/etc/dtmrepo.repos.d/dtmrepo-yum.conf
+cat <<EOF > $INSTALLDIR/etc/dtmrepo-yum.conf
 [main]
 cachedir = $INSTALLDIR/var/cache/dtmrepo
 logfile = $INSTALLDIR/var/log/dtmrepo.log
