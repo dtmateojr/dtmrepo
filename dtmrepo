@@ -261,7 +261,7 @@ gen_repodata() {
 
     (
     flock -w ${LOCKWAIT} 1001 || genrepo_lock_error ${_DESTDIR}
-    find ${_DESTDIR} -name '*.rpm' -exec rm {} \;
+    find ${_DESTDIR} -name '*.rpm' -empty -exec rm {} \;
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" -o "${_PROTECTREPO}" -eq 1 ]; then
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     else
