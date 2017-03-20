@@ -105,6 +105,7 @@ IV. Usage
 dtmrepo accepts several commandline options namely:
 
     -a : sync all packages. Useful when you are starting to build your repo server. By default only newer packages are synced
+    -c : clean up dtmrepo. Performs sanity check and disables all dtmrepo-controlled repos to avoid future errors. This does not affect the functionality of reposync at all.
     -d : comma-separated list of distros to process. If not specified then all distros are processed
     -r : comma-separated list of repos to process. If not specified then all repos are processed
     -u : sync packages
@@ -122,7 +123,7 @@ V. Usage Examples
         show help
 
     dtmrepo -c
-        perform sanity checks
+        perform sanity checks and clean up
 
     dtmrepo -i
         register and initialise the system

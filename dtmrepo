@@ -4,25 +4,8 @@ INSTALLDIR=/path/to/dtmrepo/installdir
 export PATH=${INSTALLDIR}/bin:${PATH}
 
 CONFIG=${INSTALLDIR}/etc/dtmrepo.conf
-eval $(readconf $CONFIG global)
-ARCH=${arch} KEEP=${keep} PROTECT=${protect} PROTECTREPO=${protectrepo}
-
-eval $(readconf ${yumconf} main)
-REPOSDIR=${reposdir}
-
 LOCKDIR="/var/lock"
 LOCKWAIT=30
-
-UPDATE=0
-GENREPO=0
-VERBOSE=0
-FORCE=0
-SYNCALL=0
-SELECT=0
-INITIALISE=0
-AUTOFIX=0
-PURGE=0
-
 ENTITLEMENTCERTDIR="/etc/pki/entitlement"
 YUMREPOSDIR="/etc/yum.repos.d"
 RHSMREPO="redhat.repo"
@@ -33,19 +16,23 @@ LOCALMARKER="local:"
 
 usage() {
     echo
-    echo "Usage: $(basename $0) [-adfgiprsuvx]"
-    echo -e "\t-a: sync all packages in a repo (default: new packages only)."
-    echo -e "\t-c: check the system for sanity"
-    echo -e "\t-d: <distro,...>"
-    echo -e "\t-f: force the operation"
-    echo -e "\t-g: generate repodata"
-    echo -e "\t-i: initialise and register the system"
-    echo -e "\t-p: purge undeclared repo directories"
-    echo -e "\t-r: <repo,...>"
-    echo -e "\t-s: <pkg,...>"
-    echo -e "\t-u: update"
-    echo -e "\t-v: verbose"
-    echo -e "\t-x: automatically fix subscription problems"
+    cat <<USAGE
+Usage: $(basename $0) [-acdfgiprsuvx]
+    -a: sync all packages in a repo (default: new packages only).
+    -c: clean up
+    -d: <distro,...>
+    -f: force the operation
+    -g: generate repodata
+    -i: initialise and register the system
+    -p: purge undeclared repo directories
+    -r: <repo,...>
+    -s: <pkg,...>
+    -u: update
+    -v: verbose
+    -x: automatically fix subscription problems
+
+Read instructions.txt for details.
+USAGE
     exit 1
 }
 
@@ -346,6 +333,16 @@ process_distro_repo() {
 ############################################################
 # program start
 
+UPDATE=0
+GENREPO=0
+VERBOSE=0
+FORCE=0
+SYNCALL=0
+SELECT=0
+INITIALISE=0
+AUTOFIX=0
+PURGE=0
+CLEANUP=0
 REPO=""
 REPOS=""
 TREPO=""
@@ -358,9 +355,11 @@ OPTIND=1
 
 unset http_proxy https_proxy ftp_proxy
 
-while getopts 'aifugvxpr:d:s:' opt; do
+while getopts 'acifugvxpr:d:s:' opt; do
     case "${opt}" in
         a)  SYNCALL=1
+            ;;
+        c)  CLEANUP=1
             ;;
         i)  INITIALISE=1
             ;;
@@ -390,6 +389,12 @@ while getopts 'aifugvxpr:d:s:' opt; do
     esac
 done
 
+eval $(readconf $CONFIG global)
+ARCH=${arch} KEEP=${keep} PROTECT=${protect} PROTECTREPO=${protectrepo}
+
+eval $(readconf ${yumconf} main)
+REPOSDIR=${reposdir}
+
 [ "${INITIALISE}" -eq 1 ] && initialise
 
 if [ "${AUTOFIX}" -eq 1 ]; then
@@ -407,10 +412,12 @@ if [ "${AUTOFIX}" -eq 1 ]; then
 
         [ ! -z "${REPOSDIR}" -a ! -L "${REPOSDIR}/${REDHATREPO}" ] && ln -sf ${YUMREPOSDIR}/${REDHATREPO} ${REPOSDIR}/${REDHATREPO}
     fi
+elif [ "${CLEANUP}" -eq 1 ]; then
+    sanity_check
+    yum-config-manager -c ${yumconf} --disable \* &> /dev/null
 else
     sanity_check
 fi
-yum-config-manager -c ${yumconf} --disable \* &> /dev/null
 
 [ "${DISTRO}" != "" ] && DISTROS="${DISTRO//,/ }"
 [ "${REPO}" != "" ] && REPOS="${REPO//,/ }"
