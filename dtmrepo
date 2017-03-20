@@ -52,6 +52,9 @@ configure_redhat_repo() {
         ln -sf ${YUMREPOSDIR}/${REDHATREPO} ${REPOSDIR}/${REDHATREPO}
         if [ "$?" -ne 0 ]; then
             echo "Could not create symlink ${REPOSDIR}/${REDHATREPO}. Aborting."
+            exit 1
+        else
+            yum-config-manager -c ${yumconf} --disable \* &> /dev/null
         fi
     fi
 }
