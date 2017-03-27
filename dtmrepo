@@ -217,7 +217,7 @@ download_package() {
     _BASEDIR=$(basename $(YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* -v repolist ${_REPOID}|grep '^Repo-baseurl'|awk '{print $3}'))
     if [ ! -z "${_BASEDIR}" -a "$?" -eq 0 ]; then
         declare -A _PKGS
-        _PKGLIST=$(YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader -q ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} --resolve --urls ${_PACKAGES} 2>/dev/null)
+        _PKGLIST=$(YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader -q ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} --resolve --urls ${_PACKAGES}|grep '\.rpm$')
         for _PKG in ${_PKGLIST}; do
             _PKGS["$(dirname ${_PKG##*${_BASEDIR}})"]+="$(basename ${_PKG%.rpm}) "
         done
