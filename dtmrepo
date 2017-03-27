@@ -214,7 +214,17 @@ download_package() {
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
-    YUM0=${_RELEASEVER} YUM1=${_ARCH} repotrack ${_QUIET} ${_YUMCONF} -r ${_REPOID} -p ${_DESTDIR} ${_PACKAGES}
+    _BASEDIR=$(basename $(YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* -v repolist ${_REPOID}|grep '^Repo-baseurl'|awk '{print $3}'))
+    if [ ! -z "${_BASEDIR}" -a "$?" -eq 0 ]; then
+        declare -A _PKGS
+        _PKGLIST=$(YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader -q ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} --resolve --urls ${_PACKAGES} 2>/dev/null)
+        for _PKG in ${_PKGLIST}; do
+            _PKGS["$(dirname ${_PKG##*${_BASEDIR}})"]+="$(basename ${_PKG%.rpm}) "
+        done
+        for _PKGDIR in "${!_PKGS[@]}"; do
+            YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader ${_YUMCONF} ${_QUIET} --disablerepo=* --enablerepo=${_REPOID} --destdir="${_DESTDIR}${_PKGDIR}" ${_PKGS[${_PKGDIR}]}
+        done
+    fi
     ) 1001> ${_LOCKFILE}
 
 }
