@@ -174,7 +174,51 @@ VI. Tips
 
         http_caching=none
 
-VII. genrepoconfig Tool
+
+    4. To sync multiple distros, create separate configurations under INSTALLDIR/etc/dtmrepo.conf.d. Syncing different versions of RHEL is a bit tricky because of the subscription manager certificates.
+       You will need to have access to registered machines for each version that you want to sync. Grab the certificates from /etc/pki/product from each machine and copy (rename as necessary) them into
+       the /etc/pki/product of the dtmrepo server. Here's how it looks like in our dtmrepo server:
+
+       [me@dtmrepo product]$ pwd
+       /etc/pki/product
+       [me@dtmrepo product]$ ls
+       dts.pem  el5.pem  el6.pem  el7.pem  rhscl.pem
+
+       Make sure that dtmrepo.conf has "subscribed = 1". If the dtmrepo server has already been initialised, just delete /etc/yum.repos.d/redhat-dtmrepo.repo and run "dtmrepo -x", otherwise initialise with "dtmrepo -i".
+
+       Create separate configurations for each distro you want to sync. Here's our dtmrepo.conf.d:
+
+       [me@dtmrepo dtmrepo.conf.d]$ ls
+       centos5-x86_64.conf  centos7-x86_64.conf  oel6s-x86_64.conf  rhel5s-i386.conf  rhel5s-x86_64.conf  rhel6s-x86_64.conf  rhel7s-x86_64.conf
+
+       Some tidbits of the distro configs:
+
+        [me@dtmrepo dtmrepo.conf.d]$ head rhel6s-x86_64.conf
+        [control]
+        arch = x86_64
+        releasever = 6Server
+        protectrepo = datastax
+
+        [repos]
+        os = rhel-6-server-rpms
+        oracle-java = rhel-6-server-thirdparty-oracle-java-rpms
+        optional = rhel-6-server-optional-rpms
+        supplementary = rhel-6-server-supplementary-rpms
+
+
+        [me@dtmrepo dtmrepo.conf.d]$ head rhel7s-x86_64.conf
+        [control]
+        arch = x86_64
+        releasever = 7Server
+
+        [repos]
+        os = rhel-7-server-rpms
+        oracle-java = rhel-7-server-thirdparty-oracle-java-rpms
+        optional = rhel-7-server-optional-rpms
+        supplementary = rhel-7-server-supplementary-rpms
+
+
+VII. genrepoconfig Tool (obsolete and no longer maintained)
 
     This tool is useful for generating repo configuration files for other Red Hat releases. By default, it uses INSTALLDIR/etc/dtmrepo.repos.d/redhat-dtmrepo.repo as reference but you can also pass another repo as a fourth parameter. For example, if the dtmrepo server is running EL6 but you want to pull EL5 or EL7 packages as well, you can create repo configs like so:
 
