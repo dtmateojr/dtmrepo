@@ -448,7 +448,7 @@ if [ "${PURGE}" == 1 ]; then
         if [ "${#_REPOS[@]}" != 0 ]; then
             for _REPO in ${_REPOS}; do
                 _FOUND=0
-                for _ACTIVE in ${repostore[@]}; do
+                for _ACTIVE in ${repostore[@]} ${protectrepo//,/ }; do
                     if [ "${_REPO}" == "${_ACTIVE}" ]; then
                         _FOUND=1
                         break

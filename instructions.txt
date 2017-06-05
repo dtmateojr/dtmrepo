@@ -53,6 +53,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
         subscribed -- the system is subscribed and wants to sync from Red Hat
         protect -- comma separated list of package patterns that will not be deleted even if they are old; patterns are compatible with grep
         protectrepo -- comma separated list of repo patterns to protect. All packages in the matching repos will be kept. Patterns are compatible with grep.
+                       A protected repo will not be purged even if it is not listed under the [repos] section
 
 
     Sample dtmrepo-yum.conf:
