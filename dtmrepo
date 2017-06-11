@@ -402,6 +402,11 @@ while getopts 'acifugvxpr:d:s:' opt; do
     esac
 done
 
+if [ "${SELECT}" -eq 1 -a -z "${REPO}" ]; then
+    echo "Specify the repos (-r) when downloading packages (-s). Exiting."
+    exit 1
+fi
+
 eval $(readconf $CONFIG global)
 ARCH=${arch} KEEP=${keep} PROTECT=${protect} PROTECTREPO=${protectrepo}
 
