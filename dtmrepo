@@ -179,7 +179,7 @@ download_package() {
     _DISTRO=$3
     _ARCH=$4
     _RELEASEVER=$5
-    _PACKAGES="${6/,/ }"
+    _PACKAGES="${6//,/ }"
     _QUIET="-q"
     _VERBOSE=""
     _YUMCONF=""
