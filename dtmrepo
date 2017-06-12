@@ -219,10 +219,10 @@ download_package() {
         declare -A _PKGS
         _PKGLIST=$(YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader -q ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} --resolve --urls ${_PACKAGES}|grep '\.rpm$')
         for _PKG in ${_PKGLIST}; do
-            _PKGS["$(dirname ${_PKG##*${_BASEDIR}})"]+="$(basename ${_PKG%.rpm}) "
+            _PKGS["$(dirname ${_PKG##*/${_BASEDIR}/})"]+="$(basename ${_PKG%.rpm}) "
         done
         for _PKGDIR in "${!_PKGS[@]}"; do
-            YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader ${_YUMCONF} ${_QUIET} --disablerepo=* --enablerepo=${_REPOID} --destdir="${_DESTDIR}${_PKGDIR}" ${_PKGS[${_PKGDIR}]}
+            YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader ${_YUMCONF} ${_QUIET} --disablerepo=* --enablerepo=${_REPOID} --destdir="${_DESTDIR}/${_PKGDIR}" ${_PKGS[${_PKGDIR}]}
         done
     fi
     ) 1001> ${_LOCKFILE}
