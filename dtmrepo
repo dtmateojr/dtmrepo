@@ -138,6 +138,14 @@ update_repo() {
 
     [ ! -z "${yumconf}" ] && _YUMCONF="-c ${yumconf}"
 
+    if [ ! -z "${freezerepo}" ]; then
+        echo ${_REPODIR} | egrep -q "$(echo ${freezerepo} | sed -r 's/[ ,]+/|/g')"
+        if [ "$?" -eq 0 ]; then
+            [ "${VERBOSE}" -eq 1 ] && echo "Skipping frozen repo ${_REPODIR}."
+            return 0
+        fi
+    fi
+
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
@@ -193,6 +201,14 @@ download_package() {
 
     [ ! -z "${yumconf}" ] && _YUMCONF="-c ${yumconf}"
 
+    if [ ! -z "${freezerepo}" ]; then
+        echo ${_REPODIR} | egrep -q "$(echo ${freezerepo} | sed -r 's/[ ,]+/|/g')"
+        if [ "$?" -eq 0 ]; then
+            [ "${VERBOSE}" -eq 1 ] && echo "Skipping frozen repo ${_REPODIR}."
+            return 0
+        fi
+    fi
+
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
@@ -241,6 +257,14 @@ gen_repodata() {
     [ "${FORCE}" -eq 1 ] && _FORCE=" "
     [ "${VERBOSE}" -eq 1 ] && _VERBOSE="-v"
 
+    if [ ! -z "${freezerepo}" ]; then
+        echo ${_REPODIR} | egrep -q "$(echo ${freezerepo} | sed -r 's/[ ,]+/|/g')"
+        if [ "$?" -eq 0 ]; then
+            [ "${VERBOSE}" -eq 1 ] && echo "Skipping frozen repo ${_REPODIR}."
+            return 0
+        fi
+    fi
+
     if [ ! -z "${protect}" ]; then
         _PROTECT="$(echo ${protect} | sed -r 's/[ ,]+/|/g')"
     fi
@@ -248,7 +272,7 @@ gen_repodata() {
     if [ "${SELECT}" -eq 1 ]; then
         _PROTECTREPO=1
     elif [ ! -z "${protectrepo}" ]; then
-        echo ${_REPOID} | egrep -q "$(echo ${protectrepo} | sed -r 's/[ ,]+/|/g')" && _PROTECTREPO=1
+        echo ${_REPODIR} | egrep -q "$(echo ${protectrepo} | sed -r 's/[ ,]+/|/g')" && _PROTECTREPO=1
     fi
 
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
@@ -312,8 +336,8 @@ process_distro_repo() {
     fi
 
     for DIST in ${DISTROLIST}; do
-        unset releasever arch keep protect protectrepo
-        arch=${ARCH} keep=${KEEP} protect=${PROTECT} protectrepo=${PROTECTREPO}
+        unset releasever arch keep protect protectrepo freezerepo
+        arch=${ARCH} keep=${KEEP} protect=${PROTECT} protectrepo=${PROTECTREPO} freezerepo=${FREEZEREPO}
 
         eval $(dtmrepo-repoconf ${confdir}/${DIST})
 
@@ -408,7 +432,7 @@ if [ "${SELECT}" -eq 1 -a -z "${REPO}" ]; then
 fi
 
 eval $(readconf $CONFIG global)
-ARCH=${arch} KEEP=${keep} PROTECT=${protect} PROTECTREPO=${protectrepo}
+ARCH=${arch} KEEP=${keep} PROTECT=${protect} PROTECTREPO=${protectrepo} FREEZEREPO=${freezerepo}
 
 eval $(readconf ${yumconf} main)
 REPOSDIR=${reposdir}
