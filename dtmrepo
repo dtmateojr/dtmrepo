@@ -36,6 +36,77 @@ USAGE
     exit 1
 }
 
+readconf() {
+    _CONF=$1
+    _SECTION=$2
+
+    python - <<READCONF
+
+import ConfigParser
+import sys
+
+parser = ConfigParser.SafeConfigParser()
+
+try:
+    parser.read("${_CONF}")
+except:
+    sys.stderr.write('Error reading %s.\n' % "${_CONF}")
+    sys.exit(1)
+
+try:
+    opts = parser.items("${_SECTION}")
+except:
+    sys.stderr.write('Missing section %s in %s.\n' % ("${_SECTION}","${_CONF}"))
+    sys.exit(1)
+
+for opt,val in opts:
+    print '%s=%s' % (opt, val)
+
+READCONF
+}
+
+repoconf() {
+    _CONF=$1
+
+    python - <<REPOCONF
+import ConfigParser
+import sys
+
+parser = ConfigParser.SafeConfigParser()
+
+try:
+    parser.read("${_CONF}")
+except:
+    sys.stderr.write('Error reading %s.\n' % "${_CONF}")
+    sys.exit(1)
+
+try:
+    control_opts = parser.items('control')
+except:
+    sys.stderr.write('Missing [control] section in %s.\n' % "${_CONF}")
+    sys.exit(1)
+
+try:
+    repolist = parser.items('repos')
+except:
+    sys.stderr.write('Missing [repos] section in %s.\n' % "${_CONF}")
+    sys.exit(1)
+
+for opt,val in control_opts:
+    print '%s=%s' % (opt, val)
+
+opts=[]
+vals=[]
+for opt,val in repolist:
+    opts.append(opt)
+    vals.append(val)
+
+print 'repostore=(%s)' % ' '.join(opts)
+print 'reponame=(%s)' % ' '.join(vals)
+
+REPOCONF
+}
+
 fix_cert() {
     \rm ${ENTITLEMENTCERTDIR}/* &> /dev/null
     subscription-manager refresh
@@ -339,7 +410,7 @@ process_distro_repo() {
         unset releasever arch keep protect protectrepo freezerepo
         arch=${ARCH} keep=${KEEP} protect=${PROTECT} protectrepo=${PROTECTREPO} freezerepo=${FREEZEREPO}
 
-        eval $(dtmrepo-repoconf ${confdir}/${DIST})
+        eval $(repoconf ${confdir}/${DIST})
 
         if [ "${#repostore[@]}" -eq 0 ]; then
             if [ "${VERBOSE}" -eq 1 ]; then
@@ -472,7 +543,7 @@ if [ "${PURGE}" == 1 ]; then
         _DISTROLIST=${DISTROS// /.conf }.conf
     fi
     for _DIST in ${_DISTROLIST}; do
-        eval $(dtmrepo-repoconf ${confdir}/${_DIST})
+        eval $(repoconf ${confdir}/${_DIST})
         _REPOS=$(ls ${rootdir}/${_DIST%%\.conf}/)
         if [ "${#_REPOS[@]}" != 0 ]; then
             for _REPO in ${_REPOS}; do

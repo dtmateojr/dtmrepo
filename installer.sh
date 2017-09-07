@@ -21,7 +21,7 @@ fi
 
 echo -e "#!/bin/bash\n\nINSTALLDIR=$INSTALLDIR" > $INSTALLDIR/bin/dtmrepo
 tail -n +4 dtmrepo >> $INSTALLDIR/bin/dtmrepo
-\cp readconf dtmrepo-repoconf $INSTALLDIR/bin && chmod +x $INSTALLDIR/bin/*
+chmod +x $INSTALLDIR/bin/*
 
 cat <<EOF > $INSTALLDIR/etc/dtmrepo.conf
 [global]
