@@ -1,6 +1,6 @@
 #!/bin/bash
 
-INSTALLDIR=/path/to/dtmrepo/installdir
+INSTALLDIR=/usr/local/dtmrepo
 export PATH=${INSTALLDIR}/bin:${PATH}
 
 CONFIG=${INSTALLDIR}/etc/dtmrepo.conf
@@ -248,7 +248,7 @@ update_repo() {
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
-    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l -m --download-metadata
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l -m --download-metadata --downloadcomps
     ) 1001> ${_LOCKFILE}
 }
 
@@ -358,10 +358,12 @@ gen_repodata() {
     flock -w ${LOCKWAIT} 1001 || genrepo_lock_error ${_DESTDIR}
     find ${_DESTDIR} -name '*.rpm' -empty -exec rm {} \;
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" -o "${_PROTECTREPO}" -eq 1 ]; then
-        createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+        createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR} -g ${_DESTDIR}/comps.xml
+	modifyrepo --mdtype=updateinfo ${_DESTDIR}/*updateinfo.xml.gz ${_DESTDIR}/repodata/
     else
         repomanage -c -o -k ${keep} ${_DESTDIR} | egrep -v "${_PROTECT}" | xargs rm -f
-        createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
+        createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR} -g ${_DESTDIR}/comps.xml
+	modifyrepo --mdtype=updateinfo ${_DESTDIR}/*updateinfo.xml.gz ${_DESTDIR}/repodata/
     fi
     ) 1001> ${_LOCKFILE}
 
