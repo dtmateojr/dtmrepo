@@ -483,6 +483,7 @@ while getopts 'acifugvxpr:d:s:' opt; do
             ;;
         s)  PACKAGE=${OPTARG}
             SELECT=1
+	    GENREPO=1
             UPDATE=0
             ;;
         v)  VERBOSE=1
