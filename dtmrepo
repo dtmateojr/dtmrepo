@@ -199,7 +199,7 @@ spacewalk_enable() {
         return 1
     fi
 
-    mount -o loop ${confdir}/${_DISTRO}.swk ${RHNSYSCONFIGDIR} &>/dev/null
+    mount -o loop,ro ${confdir}/${_DISTRO}.swk ${RHNSYSCONFIGDIR} &>/dev/null
     if [ "$?" -ne 0 ]; then
         echo "Error in Spacewalk handler for ${_DISTRO}."
         return 1
