@@ -8,22 +8,26 @@ LOCKDIR="/var/lock"
 LOCKWAIT=30
 ENTITLEMENTCERTDIR="/etc/pki/entitlement"
 YUMREPOSDIR="/etc/yum.repos.d"
+RHNSYSCONFIGDIR="/etc/sysconfig/rhn"
 RHSMREPO="redhat.repo"
 REDHATREPO="redhat-dtmrepo.repo"
 ISREGISTERED="Current"
 
 LOCALMARKER="local:"
+SPACEWALKMARKER="swalk:"
 
 usage() {
     echo
     cat <<USAGE
-Usage: $(basename $0) [-acdfgiprsuvx]
-    -a: sync all packages in a repo (default: new packages only).
+Usage: $(basename $0) [-acdefgikprsuvx]
+    -a: sync all packages in a repo
     -c: clean up
     -d: <distro,...>
+    -e: enroll/register with spacewalk (requires -d)
     -f: force the operation
     -g: generate repodata
-    -i: initialise and register the system
+    -i: initialise and subscribe to RHSM
+    -k: <activation key> for spacewalk registration (implies -e)
     -p: purge undeclared repo directories
     -r: <repo,...>
     -s: <pkg,...>
@@ -187,6 +191,27 @@ genrepo_lock_error() {
     exit 1
 }
 
+spacewalk_enable() {
+    _DISTRO=$1
+
+    if [ ! -f "${confdir}/${_DISTRO}.swk" ]; then
+        echo "Error: Could not find Spacewalk registration info for ${_DISTRO}."
+        return 1
+    fi
+
+    mount -o loop ${confdir}/${_DISTRO}.swk ${RHNSYSCONFIGDIR} &>/dev/null
+    if [ "$?" -ne 0 ]; then
+        echo "Error in Spacewalk handler for ${_DISTRO}."
+        return 1
+    fi
+
+    return 0
+}
+
+spacewalk_cleanup() {
+    mount | grep -q ${RHNSYSCONFIGDIR} && while true; do umount -l ${RHNSYSCONFIGDIR} &>/dev/null || break; done
+}
+
 update_repo() {
     _REPODIR=$1
     _REPOID=$2
@@ -198,6 +223,7 @@ update_repo() {
     _QUIET="-q"
     _VERBOSE=""
     _YUMCONF=""
+    _SWALK=0
 
     echo ${_ARCH}|grep -q 'i[3-6]86' && _ARCHOPTS=""
 
@@ -220,6 +246,14 @@ update_repo() {
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
+    if [ ! -d "${_DESTDIR}" ]; then
+        mkdir -p "${_DESTDIR}" &> /dev/null
+        if [ "$?" -ne 0 ]; then
+            echo "Error creating package repository ${_DESTDIR}."
+            return 1
+        fi
+    fi
+
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         _SOURCEDIR=${_REPOID#${LOCALMARKER}}
         if [ ! -L "${_DESTDIR}" ]; then
@@ -235,20 +269,18 @@ update_repo() {
             return 1
         fi
         return
-    fi
-
-    if [ ! -d "${_DESTDIR}" ]; then
-        mkdir -p "${_DESTDIR}" &> /dev/null
-        if [ "$?" -ne 0 ]; then
-            echo "Error creating package repository ${_DESTDIR}."
-            return 1
-        fi
+    elif [ "${_REPOID:0:${#SPACEWALKMARKER}}" == "${SPACEWALKMARKER}" ]; then
+        IFS=: read -ra _REPOSPEC <<<${_REPOID}
+        _REPOID=${_REPOSPEC[1]}
+        spacewalk_enable ${_DISTRO} || return 1
+        _SWALK=1
     fi
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
     YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l -m --download-metadata
+    [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
     ) 1001> ${_LOCKFILE}
 }
 
@@ -262,6 +294,7 @@ download_package() {
     _QUIET="-q"
     _VERBOSE=""
     _YUMCONF=""
+    _SWALK=0
 
     echo ${_ARCH}|grep -q 'i[3-6]86' && _ARCHOPTS=""
 
@@ -283,19 +316,22 @@ download_package() {
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
-    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
-        if [ "${VERBOSE}" -eq 1 ]; then
-            echo "Package select option not applicable to local repos."
-	fi
-        return
-    fi
-
     if [ ! -d "${_DESTDIR}" ]; then
         mkdir -p "${_DESTDIR}" &> /dev/null
         if [ "$?" -ne 0 ]; then
             echo "Error creating package repository ${_DESTDIR}."
             return 1
         fi
+    fi
+
+    if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
+        [ "${VERBOSE}" -eq 1 ] && echo "Package select option not applicable to local repos."
+        return 1
+    elif [ "${_REPOID:0:${#SPACEWALKMARKER}}" == "${SPACEWALKMARKER}" ]; then
+        IFS=: read -ra _REPOSPEC <<<${_REPOID}
+        _REPOID=${_REPOSPEC[1]}
+        spacewalk_enable ${_DISTRO} || return 1
+        _SWALK=1
     fi
 
     (
@@ -312,6 +348,7 @@ download_package() {
             YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader ${_YUMCONF} ${_QUIET} --disablerepo=* --enablerepo=${_REPOID} --destdir="${_DESTDIR}/${_PKGDIR}" ${_PKGS[${_PKGDIR}]}
         done
     fi
+    [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
     ) 1001> ${_LOCKFILE}
 
 }
@@ -438,6 +475,90 @@ process_distro_repo() {
     done
 }
 
+spacewalk_register() {
+    _DISTRO=$1
+    _KEY=$2
+
+    if ! rpm -q --quiet rhn-client-tools; then
+        echo "The rhn-client-tools modules are required to access Spacewalk. Try 'yum -y install rhn-client-tools'."
+        exit 1
+    fi
+
+    if [ -f "${confdir}/${_DISTRO}.swk" ]; then
+        read -p "A previous registration for this distro has been found. Continue?(y/N) " _OK
+        if [ -z "${_OK}" ] || [[ "${_OK}" =~ [nN] ]]; then
+            echo "Spacewalk registration cancelled."
+            exit 0
+        fi
+    fi
+
+    eval $(repoconf ${confdir}/${_DISTRO}.conf)
+    _PROFILENAME="${HOSTNAME%%.*}-${_DISTRO}-dtmrepo"
+
+    if [ -z "${_KEY}" ]; then
+        read -p "Spacewalk username: " _USERNAME
+        read -s -p "Spacewalk password: " _PASSWORD
+
+        if [ -z "${_USERNAME}" -o -z "${_PASSWORD}" ]; then
+            echo "Spacewalk username and password are required if activation key is not supplied."
+            exit 1
+        fi
+    fi
+
+    # prepare spacewalk custom filesystem
+    # first, make sure there are no stale loop devices associated with this file
+    _LOOPDEV=$(losetup -j ${confdir}/${_DISTRO}.swk 2>/dev/null | cut -d: -f1)
+    [ ! -z "${_LOOPDEV}" ] && losetup -d ${_LOOPDEV}
+
+    # now create the tiny filesystem
+    dd if=/dev/zero of="${confdir}/${_DISTRO}.swk" bs=4M count=1 && sync
+    losetup -f ${confdir}/${_DISTRO}.swk
+    _LOOPDEV=$(losetup -j ${confdir}/${_DISTRO}.swk | cut -d: -f1)
+    if [ -z "${_LOOPDEV}" ]; then
+        echo "Could not find a free loop device. Aborting."
+        exit 1
+    fi
+    mkfs -t ext4 ${_LOOPDEV}
+
+    # copy up2date configs
+    _MNTDIR=$(mktemp -d)
+    mount ${_LOOPDEV} ${_MNTDIR}
+    if [ "$?" -ne 0 ]; then
+        echo "Error mounting loop device ${_LOOPDEV}. Aborting."
+        losetup -d ${_LOOPDEV}
+        exit 1
+    fi
+    rsync -a ${RHNSYSCONFIGDIR}/ ${_MNTDIR}
+    pushd ${_MNTDIR}
+    \rm -f systemid &>/dev/null
+    sed -i "s/versionOverride=.*/versionOverride=${releasever}/" up2date
+    popd
+
+    sync
+    umount -l ${_MNTDIR} && \rm -r ${_MNTDIR}
+    losetup -d ${_LOOPDEV}
+
+    #attempt to register with Spacewalk
+    spacewalk_enable ${_DISTRO}
+
+    python - <<REGISTER
+import sys
+sys.path.insert(-1, '/usr/share/rhn/')
+from up2date_client import rhnreg
+
+rhnreg.cfg['versionOverride'] = '%s' % "${releasever}"
+try:
+    systemid = rhnreg.registerSystem(username='%s'%"${_USERNAME}",password='%s'%"${_PASSWORD}", token='%s'%"${_KEY}", profileName='%s'%"${_PROFILENAME}")
+    rhnreg.writeSystemId(systemid)
+except:
+    sys.stderr.write('Unknown error during system registration.\n')
+
+REGISTER
+
+    sync
+    spacewalk_cleanup
+}
+
 ############################################################
 # program start
 
@@ -451,6 +572,8 @@ INITIALISE=0
 AUTOFIX=0
 PURGE=0
 CLEANUP=0
+ENROLL=0
+KEY=""
 REPO=""
 REPOS=""
 TREPO=""
@@ -463,28 +586,33 @@ OPTIND=1
 
 unset http_proxy https_proxy ftp_proxy
 
-while getopts 'acifugvxpr:d:s:' opt; do
+while getopts 'acefgiuvxpd:k:r:s:' opt; do
     case "${opt}" in
         a)  SYNCALL=1
             ;;
         c)  CLEANUP=1
             ;;
-        i)  INITIALISE=1
+        d)  DISTRO=${OPTARG}
+            ;;
+        e)  ENROLL=1
             ;;
         f)  FORCE=1
             ;;
-        u)  [ "${SELECT}" -eq 0 ] && UPDATE=1
-            ;;
         g)  GENREPO=1
+            ;;
+        i)  INITIALISE=1
+            ;;
+        k)  KEY=${OPTARG}
+            ENROLL=1
             ;;
         r)  REPO=${OPTARG}
             ;;
-        d)  DISTRO=${OPTARG}
-            ;;
         s)  PACKAGE=${OPTARG}
             SELECT=1
-	    GENREPO=1
+            GENREPO=1
             UPDATE=0
+            ;;
+        u)  [ "${SELECT}" -eq 0 ] && UPDATE=1
             ;;
         v)  VERBOSE=1
             ;;
@@ -508,6 +636,21 @@ ARCH=${arch} KEEP=${keep} PROTECT=${protect} PROTECTREPO=${protectrepo} FREEZERE
 
 eval $(readconf ${yumconf} main)
 REPOSDIR=${reposdir}
+
+spacewalk_cleanup
+
+if [ "${ENROLL}" -eq 1 ]; then
+    if [ -z "${DISTRO}" ]; then
+        echo "Specify the distro (-d option) to register with Spacewalk."
+        exit 1
+    fi
+
+    # register with spacewalk
+    # avoid complications and ignore other options
+    spacewalk_register "${DISTRO}" "${KEY}"
+
+    exit 0
+fi
 
 [ "${INITIALISE}" -eq 1 ] && initialise
 

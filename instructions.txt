@@ -33,7 +33,7 @@ If you wish to synchronise Red Hat packages, make sure that your dtmrepo server 
 This will register and initialise dtmrepo. During registration it will ask for your Red Hat credentials and attempt to subscribe your system using subscription-manager. It will also configure /etc/rhsm/rhsm.conf such that dtmrepo will internally manage the yum repository configuration files.
 
     The main configuration file for dtmrepo is INSTALLDIR/etc/dtmrepo.conf. Sample settings:
-
+    ================================
     [global]
     rootdir = /var/dtmrepo
     confdir = /etc/dtmrepo.conf.d
@@ -44,6 +44,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     protect = java,firefox
     protectrepo = myrepo,foo*
     freezerepo = os
+    ================================
 
     At the moment there is just one section called [global]. This section is required.
         rootdir – this is the where packages are stored. Each distro will have its own subdirectory.
@@ -57,13 +58,14 @@ This will register and initialise dtmrepo. During registration it will ask for y
         freezerepo -- comma separated list of repos to freeze. Frozen repos will not be modified by any operation.
 
     Sample dtmrepo-yum.conf:
-
+    ===============================
     [main]
     cachedir=/var/cache/dtmrepo/
     logfile=/var/log/dtmrepo.log
     obsoletes=1
     plugins=1
     reposdir=/etc/dtmrepo.repos.d
+    ===============================
 
 
     The INSTALLDIR/etc/dtmrepo.conf.d directory
@@ -71,6 +73,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     This directory contains distro-specific configuration files. The configuration files must have an extension of .conf. The filename defines the distro name. For example, the distro rhel5s-x86_64 will have a configuration file called INSTALLDIR/etc/dtmrepo.conf.d/rhel5s-x86_64.conf. The distro name also corresponds to the directory REPODIR/distro where repo packages are saved during synchronisation.
 
     Below is a sample distro.conf configuration file:
+    ====================================================
     [control]
     releasever = 5Server
     arch = x86_64
@@ -83,31 +86,76 @@ This will register and initialise dtmrepo. During registration it will ask for y
     supplementary = rhel-5-server-supplementary-rpms
     epel = epel-5-x86_64
     foo = local:/var/dtmrepo/foo/el5/x86_64
+    misc = swalk:some-spacewalk-channel
+    ====================================================
 
     There are two sections: [control] and [repos]. The [control] section may override some of the global configuration options. In the example above it overrides the the number of package versions to keep. The [repos] section defines the different repositories that will be synced. The format is "targetdir = repoid". The targetdir corresponds to the directory REPDODIR/rhel5s-x86_64/targetdir and repoid is a real yum repository that is preconfigured under INSTALLDIR/etc/dtmrepo.repos.d/.
 
-    IMPORTANT: For all distros that rely on Red Hat subscription-manager, the "releasever" and "arch" variables NEED to be defined.
+    IMPORTANT: For all distros that rely on Red Hat subscription-manager and Spacewalk, the "releasever" and "arch" variables NEED to be defined.
 
     At the moment there are two types of repoid that is accepted by dtmrepo. The first type is the most common where the repoid is a real yum repo. In the example above, the line epel = epel-5-x86_64 implies that epel-5-x86_64 is a yum repo defined under INSTALLDIR/etc/dtmrepo.repos.d/ like this:
 
+    ===============================================================================
     [epel-5-x86_64]
     name=epel-5
     mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=epel-5&arch=x86_64
     failovermethod=priority
     gpgcheck=1
     gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-5
+    ===============================================================================
 
     Put the repo configurations under the directory specified in "reposdir" of the custom yum configuration specified in "yumconf" of INSTALLDIR/etc/dtmrepo.conf.
 
     The second type of repoid is not a real repository but just a collection of packages stored in a directory somewhere. This is specified by the identifier local:. In the example above, /var/dtmrepo/foo/el5/x86_64 need not contain a repodata. If the directory already exists where it's supposed to be under repodata (i.e. /var/dtmrepo/rhel5s-x86_64/foo) then it is left untouched otherwise a symlink that points to the source directory is created under the said repodata.
 
-IV. Usage
+    The third type of repoid is for Spacewalk channels. For this to work, the dtmrepo server needs to be registered with Spacewalk obviously. If the distro matches the distro of the dtmrepo server then the "swalk" marker is not needed. If the distro is a "fake" distro, i.e. you are fetching EL7 packages from a EL6 dtmrepo server, then you need to register first (see Section IV) and the "swalk" marker is required.
+
+IV. Spacewalk Registration
+
+    This feature requires that the rhn-client-tools python modules are installed. These modules are installed under "/usr/share/rhn/up2date_client".
+
+    The main challenge with Spacewalk is that when you register a system, it would automatically figure out the OS distro of the system and then attach the system to a base channel. Channels that are outside of this base channel are inaccessible to the system.
+
+    For the dtmrepo server to fetch packages from other base channels we need to "fake" its distro. This is performed by doing "dtmrepo -e -d <distro>".
+    Before trying to register with Spacewalk, make sure that you have your distro.conf file already configured. Below is a sample /etc/dtmrepo.conf.d/rhel7s-x86_64.conf file:
+
+    ==============================================
+    [control]
+    releasever = 7Server
+    arch = x86_64
+    keep = 3
+
+    [repos]
+    base-os = swalk:el7-base-x86_64
+    =============================================
+
+    Make sure that "releasever" matches the base channel that you want to register with. To associate this fake distro with a Spacewalk base channel, it is recommended that you get the activation key (14de4a3a0b6abcd768b34abfa4b11111 in the example below) for that base channel then execute:
+
+    dtmrepo -e -d rhel7s-x86_64 -k 14de4a3a0b6abcd768b34abfa4b11111
+
+    If an activation key is not supplied it will prompt for your Spacewalk username and password instead.
+    This fake distro will be automatically have a profile name of "$HOSTNAME-$DISTRO-dtmrepo". Hopefully, the registration will succeed. Log in to your Spacewalk server and associate this profile with other child channels if required. You can then use these channels in the [repos] section prefixed with "swalk":
+
+    ======================================
+    optional = swalk:el7-optional-channel
+    custom = swalk:el7-custom-channel
+    foobar = swalk:foobar-channel
+    ======================================
+
+    To start fetching packages for the Spacewalk channels, do the usual thing:
+
+    dtmrepo -ugv -r base-os -d rhel7-x86_64
+
+V. Usage
 
 dtmrepo accepts several commandline options namely:
 
     -a : sync all packages. Useful when you are starting to build your repo server. By default only newer packages are synced
     -c : clean up dtmrepo. Performs sanity check and disables all dtmrepo-controlled repos to avoid future errors. This does not affect the functionality of reposync at all.
     -d : comma-separated list of distros to process. If not specified then all distros are processed
+    -e : enroll/register with Spacewalk. This requires -d option. Register one distro at a time for now please.
+    -f : force the operation. Normally used in conjunction with -g option. Useful when you are suspecting a corrupted repodata.
+    -k : activation key to use when registering with Spacewalk. Implies -e option
     -r : comma-separated list of repos to process. If not specified then all repos are processed
     -u : sync packages
     -g : generate repodata
@@ -118,7 +166,7 @@ dtmrepo accepts several commandline options namely:
     -i : register and initialise the system. Only relevant if you wish to sync with Red Hat. Use it if the sanity check reports any error. It is smart enough to fix only the errors encountered.
     -v : run in verbose mode. Useful when dtmrepo seems to ignore you.
 
-V. Usage Examples
+VI. Usage Examples
 
     dtmrepo -?
         show help
@@ -159,7 +207,7 @@ V. Usage Examples
     dtmrepo -p
         purge all repo directories that are not declared in the distro config files
 
-VI. Tips
+VII. Tips
 
     1. Make sure that all the repo configurations in /etc/yum.repos.d are disabled (enabled=0) except for the self referencing repo mentioned in #2 below.
 
@@ -218,7 +266,7 @@ VI. Tips
         supplementary = rhel-7-server-supplementary-rpms
 
 
-VII. genrepoconfig Tool (obsolete and no longer maintained)
+VIII. genrepoconfig Tool (obsolete and no longer maintained)
 
     This tool is useful for generating repo configuration files for other Red Hat releases. By default, it uses INSTALLDIR/etc/dtmrepo.repos.d/redhat-dtmrepo.repo as reference but you can also pass another repo as a fourth parameter. For example, if the dtmrepo server is running EL6 but you want to pull EL5 or EL7 packages as well, you can create repo configs like so:
 
@@ -228,7 +276,7 @@ VII. genrepoconfig Tool (obsolete and no longer maintained)
 
     From here you can select what repos to sync after creating your custom configs under /etc/dtmrepo.conf.d/.
 
-VIII. Limitations
+IX. Limitations
 
     1. To sync multiple different versions and types of RHEL (i.e. 5Server, 6Workstation, etc...) from one dtmrepo server, you will need to get the correct product certificates from Red Hat otherwise dtmrepo will only sync the RHEL product type that dtmrepo is running in. Once you have the product certificates installed "dtmrepo -x" should automatically take care of the repository configuration under /etc/yum.repos.d/redhat-dtmrepo.repo. Of course this restriction does not affect non-Red Hat repos.
 
