@@ -511,14 +511,14 @@ spacewalk_register() {
     [ ! -z "${_LOOPDEV}" ] && losetup -d ${_LOOPDEV}
 
     # now create the tiny filesystem
-    dd if=/dev/zero of="${confdir}/${_DISTRO}.swk" bs=4M count=1 && sync
+    dd if=/dev/zero of="${confdir}/${_DISTRO}.swk" bs=4M count=1 &>/dev/null && sync
     losetup -f ${confdir}/${_DISTRO}.swk
     _LOOPDEV=$(losetup -j ${confdir}/${_DISTRO}.swk | cut -d: -f1)
     if [ -z "${_LOOPDEV}" ]; then
         echo "Could not find a free loop device. Aborting."
         exit 1
     fi
-    mkfs -t ext4 ${_LOOPDEV}
+    mkfs -t ext4 ${_LOOPDEV} &>/dev/null
 
     # copy up2date configs
     _MNTDIR=$(mktemp -d)
@@ -529,10 +529,10 @@ spacewalk_register() {
         exit 1
     fi
     rsync -a ${RHNSYSCONFIGDIR}/ ${_MNTDIR}
-    pushd ${_MNTDIR}
+    pushd ${_MNTDIR} &>/dev/null
     \rm -f systemid &>/dev/null
     sed -i "s/versionOverride=.*/versionOverride=${releasever}/" up2date
-    popd
+    popd &>/dev/null
 
     sync
     umount -l ${_MNTDIR} && \rm -r ${_MNTDIR}
