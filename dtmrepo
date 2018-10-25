@@ -210,6 +210,7 @@ spacewalk_enable() {
 
 spacewalk_cleanup() {
     mount | grep -q ${RHNSYSCONFIGDIR} && while true; do umount -l ${RHNSYSCONFIGDIR} &>/dev/null || break; done
+    losetup -d $(losetup -a|grep '\.swk)'|cut -d: -f1)
 }
 
 update_repo() {
@@ -638,6 +639,7 @@ eval $(readconf ${yumconf} main)
 REPOSDIR=${reposdir}
 
 spacewalk_cleanup
+trap spacewalk_cleanup 0 1 2 3 6 15
 
 if [ "${ENROLL}" -eq 1 ]; then
     if [ -z "${DISTRO}" ]; then
