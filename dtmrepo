@@ -317,7 +317,7 @@ update_repo() {
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
-    YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
+    [ "${_SWALK}" -eq 1 ] || YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
     YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l -m --download-metadata
     [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
     ) 1001> ${_LOCKFILE}
@@ -367,10 +367,8 @@ download_package() {
         [ "${VERBOSE}" -eq 1 ] && echo "Package select option not applicable to local repos."
         return 1
     elif [ "${_REPOID:0:${#SPACEWALKMARKER}}" == "${SPACEWALKMARKER}" ]; then
-        IFS=: read -ra _REPOSPEC <<<${_REPOID}
-        _REPOID=${_REPOSPEC[1]}
-        spacewalk_enable ${_DISTRO} || return 1
-        _SWALK=1
+        echo "Feature not supported for Spacewalk channels."
+        return 1
     fi
 
     (
@@ -387,7 +385,6 @@ download_package() {
             YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader ${_YUMCONF} ${_QUIET} --disablerepo=* --enablerepo=${_REPOID} --destdir="${_DESTDIR}/${_PKGDIR}" ${_PKGS[${_PKGDIR}]}
         done
     fi
-    [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
     ) 1001> ${_LOCKFILE}
 }
 
