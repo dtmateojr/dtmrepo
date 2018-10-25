@@ -6,6 +6,7 @@ export PATH=${INSTALLDIR}/bin:${PATH}
 CONFIG=${INSTALLDIR}/etc/dtmrepo.conf
 LOCKDIR="/var/lock"
 LOCKWAIT=30
+YUMLOCKFILE="/var/run/yum.pid"
 ENTITLEMENTCERTDIR="/etc/pki/entitlement"
 YUMREPOSDIR="/etc/yum.repos.d"
 RHNSYSCONFIGDIR="/etc/sysconfig/rhn"
@@ -191,26 +192,63 @@ genrepo_lock_error() {
     exit 1
 }
 
+lock_yum() {
+    if [ -f "${YUMLOCKFILE}" ]; then
+        _PID=$(head -1 ${YUMLOCKFILE})
+        if [ ! -z "${_PID}" -a "$$" -ne "${_PID}" ]; then
+            echo "Error: Another yum process is running."
+            return 1
+        fi
+    else
+        exec 1003> ${YUMLOCKFILE} && flock -w 10 -n 1003
+        if [ "$?" -ne 0 ]; then
+            echo "Error: Could not lock yum."
+            return 1
+        else
+            echo $$ > ${YUMLOCKFILE}
+            return 0
+        fi
+    fi
+}
+
+unlock_yum() {
+    if [ -f "${YUMLOCKFILE}" ]; then
+        _PID=$(head -1 ${YUMLOCKFILE})
+        if [ ! -z "${_PID}" -a "$$" -eq "${_PID}" ]; then
+            flock -u 1003
+            \rm -f ${YUMLOCKFILE} &>/dev/null
+        fi
+    fi
+}
+
 spacewalk_enable() {
     _DISTRO=$1
+    _REG=$2
+    _MOUNTOPTS="loop"
+
+    [ -z "${_REG}" ] && _MOUNTOPTS="${_MOUNTOPTS},ro"
+
+    lock_yum || return 1
 
     if [ ! -f "${confdir}/${_DISTRO}.swk" ]; then
         echo "Error: Could not find Spacewalk registration info for ${_DISTRO}."
         return 1
     fi
 
-    mount -o loop,ro ${confdir}/${_DISTRO}.swk ${RHNSYSCONFIGDIR} &>/dev/null
+    mount -o ${_MOUNTOPTS} ${confdir}/${_DISTRO}.swk ${RHNSYSCONFIGDIR} &>/dev/null
     if [ "$?" -ne 0 ]; then
         echo "Error in Spacewalk handler for ${_DISTRO}."
         return 1
     fi
-
     return 0
 }
 
 spacewalk_cleanup() {
     mount | grep -q ${RHNSYSCONFIGDIR} && while true; do umount -l ${RHNSYSCONFIGDIR} &>/dev/null || break; done
-    losetup -d $(losetup -a|grep '\.swk)'|cut -d: -f1)
+    _LOOPDEVS=$(losetup -a|grep '\.swk)'|cut -d: -f1)
+    [ ! -z "${_LOOPDEVS}" ] && losetup -d ${_LOOPDEVS}
+
+    unlock_yum
 }
 
 update_repo() {
@@ -351,7 +389,6 @@ download_package() {
     fi
     [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
     ) 1001> ${_LOCKFILE}
-
 }
 
 gen_repodata() {
@@ -540,7 +577,7 @@ spacewalk_register() {
     losetup -d ${_LOOPDEV}
 
     #attempt to register with Spacewalk
-    spacewalk_enable ${_DISTRO}
+    spacewalk_enable ${_DISTRO} register
 
     python - <<REGISTER
 import sys
