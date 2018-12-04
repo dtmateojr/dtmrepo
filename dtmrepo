@@ -285,14 +285,6 @@ update_repo() {
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
-    if [ ! -d "${_DESTDIR}" ]; then
-        mkdir -p "${_DESTDIR}" &> /dev/null
-        if [ "$?" -ne 0 ]; then
-            echo "Error creating package repository ${_DESTDIR}."
-            return 1
-        fi
-    fi
-
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         _SOURCEDIR=${_REPOID#${LOCALMARKER}}
         if [ ! -L "${_DESTDIR}" ]; then
@@ -354,14 +346,6 @@ download_package() {
 
     _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
-
-    if [ ! -d "${_DESTDIR}" ]; then
-        mkdir -p "${_DESTDIR}" &> /dev/null
-        if [ "$?" -ne 0 ]; then
-            echo "Error creating package repository ${_DESTDIR}."
-            return 1
-        fi
-    fi
 
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
         [ "${VERBOSE}" -eq 1 ] && echo "Package select option not applicable to local repos."
