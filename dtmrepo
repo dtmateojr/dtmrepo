@@ -351,14 +351,20 @@ download_package() {
         [ "${VERBOSE}" -eq 1 ] && echo "Package select option not applicable to local repos."
         return 1
     elif [ "${_REPOID:0:${#SPACEWALKMARKER}}" == "${SPACEWALKMARKER}" ]; then
-        echo "Feature not supported for Spacewalk channels."
-        return 1
+        IFS=: read -ra _REPOSPEC <<<${_REPOID}
+        _REPOID=${_REPOSPEC[1]}
+        spacewalk_enable ${_DISTRO} || return 1
+        _SWALK=1
     fi
 
     (
     flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
+
+    # unlock yum when operating with spacewalk repos. Risky but necessary.
+    [ "${_SWALK}" -eq 1 ] && unlock_yum
+
     YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
-    _BASEDIR=$(basename $(YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* -v repolist ${_REPOID}|grep '^Repo-baseurl'|awk '{print $3}'))
+    _BASEDIR=$(basename $(YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} -v repolist |grep '^Repo-baseurl'|awk '{print $3}'))
     if [ ! -z "${_BASEDIR}" -a "$?" -eq 0 ]; then
         declare -A _PKGS
         _PKGLIST=$(YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader -q ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} --resolve --urls ${_PACKAGES}|grep '\.rpm$')
@@ -369,6 +375,7 @@ download_package() {
             YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader ${_YUMCONF} ${_QUIET} --disablerepo=* --enablerepo=${_REPOID} --destdir="${_DESTDIR}/${_PKGDIR}" ${_PKGS[${_PKGDIR}]}
         done
     fi
+    [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
     ) 1001> ${_LOCKFILE}
 }
 
