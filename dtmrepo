@@ -408,6 +408,8 @@ gen_repodata() {
 
     if [ "${SELECT}" -eq 1 ]; then
         _PROTECTREPO=1
+    elif [ "${MIRROR}" -eq 1 ]; then
+        _PROTECTREPO=1
     elif [ ! -z "${protectrepo}" ]; then
         echo ${_REPODIR} | egrep -q "$(echo ${protectrepo} | sed -r 's/[ ,]+/|/g')" && _PROTECTREPO=1
     fi
@@ -638,6 +640,7 @@ while getopts 'acefgiumvxpd:k:r:s:' opt; do
         m)  MIRROR=1
             UPDATE=1
             SYNCALL=1
+            GENREPO=1
             ;;
         r)  REPO=${OPTARG}
             ;;
