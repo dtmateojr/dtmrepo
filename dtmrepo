@@ -16,6 +16,7 @@ ISREGISTERED="Current"
 
 LOCALMARKER="local:"
 SPACEWALKMARKER="swalk:"
+MIRRORMARKER="mirror:"
 
 usage() {
     echo
@@ -308,6 +309,11 @@ update_repo() {
         _REPOID=${_REPOSPEC[1]}
         spacewalk_enable ${_DISTRO} || return 1
         _SWALK=1
+    elif [ "${_REPOID:0:${#MIRRORMARKER}}" == "${MIRRORMARKER}" ]; then
+        IFS=: read -ra _REPOSPEC <<<${_REPOID}
+        _REPOID=${_REPOSPEC[1]}
+        _SYNCALL=''
+        _DELETE='-d'
     fi
 
     (
@@ -358,6 +364,9 @@ download_package() {
         _REPOID=${_REPOSPEC[1]}
         spacewalk_enable ${_DISTRO} || return 1
         _SWALK=1
+    elif [ "${_REPOID:0:${#MIRRORMARKER}}" == "${MIRRORMARKER}" ]; then
+        IFS=: read -ra _REPOSPEC <<<${_REPOID}
+        _REPOID=${_REPOSPEC[1]}
     fi
 
     (
@@ -408,7 +417,7 @@ gen_repodata() {
 
     if [ "${SELECT}" -eq 1 ]; then
         _PROTECTREPO=1
-    elif [ "${MIRROR}" -eq 1 ]; then
+    elif [ "${MIRROR}" -eq 1 -o "${_REPOID:0:${#MIRRORMARKER}}" == "${MIRRORMARKER}" ]; then
         _PROTECTREPO=1
     elif [ ! -z "${protectrepo}" ]; then
         echo ${_REPODIR} | egrep -q "$(echo ${protectrepo} | sed -r 's/[ ,]+/|/g')" && _PROTECTREPO=1

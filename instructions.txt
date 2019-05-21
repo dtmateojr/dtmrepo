@@ -87,6 +87,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     epel = epel-5-x86_64
     foo = local:/var/dtmrepo/foo/el5/x86_64
     misc = swalk:some-spacewalk-channel
+    dev = mirror:dev-el5
     ====================================================
 
     There are two sections: [control] and [repos]. The [control] section may override some of the global configuration options. In the example above it overrides the the number of package versions to keep. The [repos] section defines the different repositories that will be synced. The format is "targetdir = repoid". The targetdir corresponds to the directory REPDODIR/rhel5s-x86_64/targetdir and repoid is a real yum repository that is preconfigured under INSTALLDIR/etc/dtmrepo.repos.d/.
@@ -105,6 +106,8 @@ This will register and initialise dtmrepo. During registration it will ask for y
     ===============================================================================
 
     Put the repo configurations under the directory specified in "reposdir" of the custom yum configuration specified in "yumconf" of INSTALLDIR/etc/dtmrepo.conf.
+
+    If the repoid is prefixed by "mirror:" then an update operation will mirror that repo. Local packages that are no longer present in the source repo will be deleted.
 
     The second type of repoid is not a real repository but just a collection of packages stored in a directory somewhere. This is specified by the identifier local:. In the example above, /var/dtmrepo/foo/el5/x86_64 need not contain a repodata. If the directory already exists where it's supposed to be under repodata (i.e. /var/dtmrepo/rhel5s-x86_64/foo) then it is left untouched otherwise a symlink that points to the source directory is created under the said repodata.
 
@@ -159,7 +162,8 @@ dtmrepo accepts several commandline options namely:
     -r : comma-separated list of repos to process. If not specified then all repos are processed
     -u : sync packages
     -g : generate repodata
-    -s : download selected packages and all dependencies. This option disables -u and temporarily protects the entire repo so that the packages are not deleted during repodata creation. Has no effect on "local:" repos.
+    -m : mirror; implies -a, -u and -g
+    -s : download selected packages and all dependencies. This option disables -u and temporarily protects the entire repo so that the packages are not deleted during repodata creation. Has no effect on "local:" repos. Automatically performs -g.
     -p : purge undeclared repo directories
     -f : force the operation. Normally, dtmrepo will not attempt to generate new repodata if it's newer than any package in the repo.
     -x : autofix. Red Hat subscription-manager automatically updates the subscription certificate. This option automatically updates master.repo with the new cert.
@@ -182,6 +186,9 @@ VI. Usage Examples
 
     dtmrepo -ug -r epel
         sync and generate repo data for epel on all distros
+
+    dtmrepo -mv -r epel
+        mirror the epel repo for all distros
 
     dtmrepo -u -r foo,bar
         sync foo and bar repos on all distros
