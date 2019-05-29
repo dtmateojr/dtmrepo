@@ -4,7 +4,7 @@ INSTALLDIR=/path/to/dtmrepo/installdir
 export PATH=${INSTALLDIR}/bin:${PATH}
 
 CONFIG=${INSTALLDIR}/etc/dtmrepo.conf
-LOCKDIR="/var/lock"
+LOCKFILE="/var/lock/dtmrepo.lock"
 LOCKWAIT=30
 YUMLOCKFILE="/var/run/yum.pid"
 ENTITLEMENTCERTDIR="/etc/pki/entitlement"
@@ -184,13 +184,8 @@ initialise() {
     configure_redhat_repo
 }
 
-update_lock_error() {
-    echo "Another update process has a lock on $1."
-    exit 1
-}
-
-genrepo_lock_error() {
-    echo "An update or createrepo process has a lock on $1."
+lock_error() {
+    echo "Another dtmrepo process has locked the execution."
     exit 1
 }
 
@@ -286,7 +281,6 @@ update_repo() {
         fi
     fi
 
-    _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
@@ -316,12 +310,9 @@ update_repo() {
         _DELETE='-d'
     fi
 
-    (
-    flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
     [ "${_SWALK}" -eq 1 ] || YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
     YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_DELETE} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l -m --download-metadata
     [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
-    ) 1001> ${_LOCKFILE}
 }
 
 download_package() {
@@ -353,7 +344,6 @@ download_package() {
         fi
     fi
 
-    _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/${_DISTRO}/${_REPODIR}"
 
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" ]; then
@@ -368,9 +358,6 @@ download_package() {
         IFS=: read -ra _REPOSPEC <<<${_REPOID}
         _REPOID=${_REPOSPEC[1]}
     fi
-
-    (
-    flock -w ${LOCKWAIT} 1001 || update_lock_error ${_DESTDIR}
 
     # unlock yum when operating with spacewalk repos. Risky but necessary.
     [ "${_SWALK}" -eq 1 ] && unlock_yum
@@ -388,7 +375,6 @@ download_package() {
         done
     fi
     [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
-    ) 1001> ${_LOCKFILE}
 }
 
 gen_repodata() {
@@ -423,7 +409,6 @@ gen_repodata() {
         echo ${_REPODIR} | egrep -q "$(echo ${protectrepo} | sed -r 's/[ ,]+/|/g')" && _PROTECTREPO=1
     fi
 
-    _LOCKFILE="${LOCKDIR}/${_DISTRO}-${_REPODIR}.lock"
     _DESTDIR="${rootdir}/$_DISTRO/$_REPODIR"
 
     if [ ! -d "${_DESTDIR}" ]; then
@@ -431,8 +416,6 @@ gen_repodata() {
         return 1
     fi
 
-    (
-    flock -w ${LOCKWAIT} 1001 || genrepo_lock_error ${_DESTDIR}
     find ${_DESTDIR} -name '*.rpm' -empty -exec rm {} \;
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" -o "${_PROTECTREPO}" -eq 1 ]; then
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
@@ -440,8 +423,6 @@ gen_repodata() {
         repomanage -c -o -k ${keep} ${_DESTDIR} | egrep -v "${_PROTECT}" | xargs rm -f
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     fi
-    ) 1001> ${_LOCKFILE}
-
 }
 
 action() {
@@ -687,6 +668,9 @@ REPOSDIR=${reposdir}
 spacewalk_cleanup
 trap spacewalk_cleanup 0 1 2 3 6 15
 
+(
+flock -w ${LOCKWAIT} 1001 || lock_error
+
 if [ "${ENROLL}" -eq 1 ]; then
     if [ -z "${DISTRO}" ]; then
         echo "Specify the distro (-d option) to register with Spacewalk."
@@ -773,3 +757,6 @@ else
         fi
     done
 fi
+
+) 1001> ${LOCKFILE}
+
