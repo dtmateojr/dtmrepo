@@ -39,6 +39,7 @@ cachedir = $INSTALLDIR/var/cache/dtmrepo
 logfile = $INSTALLDIR/var/log/dtmrepo.log
 obsoletes = 1
 plugins = 1
+enabled = false
 reposdir = $INSTALLDIR/etc/dtmrepo.repos.d
 EOF
 
