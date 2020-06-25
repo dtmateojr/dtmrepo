@@ -225,7 +225,10 @@ spacewalk_enable() {
 
     [ -z "${_REG}" ] && _MOUNTOPTS="${_MOUNTOPTS},ro"
 
-    lock_yum || return 1
+    _OSVER=$(uname -r|grep -o \.el.\.|cut -c4)
+    if [ "${_OSVER}" -lt 7 ]; then
+        lock_yum || return 1
+    fi
 
     if [ ! -f "${confdir}/${_DISTRO}.swk" ]; then
         echo "Error: Could not find Spacewalk registration info for ${_DISTRO}."
