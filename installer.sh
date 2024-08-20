@@ -49,6 +49,8 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 
+yum -y install createrepo yum-utils
+
 \cp httpd-dtmrepo.conf /etc/httpd/conf.d/dtmrepo.conf
 ln -sf $REPODIR /var/www/dtmrepo
 chkconfig httpd on

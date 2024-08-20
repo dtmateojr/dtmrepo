@@ -255,8 +255,8 @@ update_repo() {
     _REPODIR=$1
     _REPOID=$2
     _DISTRO=$3
-    _ARCH=$4
-    _ARCHOPTS="-a ${_ARCH}"
+    _ARCH=${4:-noarch}
+    _ARCHOPTS="-a noarch -a ${_ARCH}"
     _RELEASEVER=$5
     _SYNCALL="-n"
     _DELETE=''
@@ -272,7 +272,7 @@ update_repo() {
         _QUIET=""
     fi
     [ "${SYNCALL}" -eq 1 ] && _SYNCALL=""
-    [ "${MIRROR}" -eq 1 ] && _DELETE='-d'
+    [ "${MIRROR}" -eq 1 ] && _DELETE='--delete'
 
     [ ! -z "${yumconf}" ] && _YUMCONF="-c ${yumconf}"
 
@@ -310,11 +310,11 @@ update_repo() {
         IFS=: read -ra _REPOSPEC <<<${_REPOID}
         _REPOID=${_REPOSPEC[1]}
         _SYNCALL=''
-        _DELETE='-d'
+        _DELETE='--delete'
     fi
 
     [ "${_SWALK}" -eq 1 ] || YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
-    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} -r ${_REPOID} ${_DELETE} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -l -m --download-metadata
+    YUM0=${_RELEASEVER} YUM1=${_ARCH} reposync ${_QUIET} ${_YUMCONF} ${_SYNCALL} --repoid ${_REPOID} ${_DELETE} ${_ARCHOPTS} -p ${_DESTDIR} --norepopath -m --download-metadata
     [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
 }
 
@@ -322,7 +322,7 @@ download_package() {
     _REPODIR=$1
     _REPOID=$2
     _DISTRO=$3
-    _ARCH=$4
+    _ARCH=${4:-noarch}
     _RELEASEVER=$5
     _PACKAGES="${6//,/ }"
     _QUIET="-q"
@@ -368,13 +368,12 @@ download_package() {
     YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} clean metadata &> /dev/null
     _BASEDIR=$(basename $(YUM0=${_RELEASEVER} YUM1=${_ARCH} yum ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} -v repolist |grep '^Repo-baseurl'|awk '{print $3}'))
     if [ ! -z "${_BASEDIR}" -a "$?" -eq 0 ]; then
-        declare -A _PKGS
         _PKGLIST=$(YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader -q ${_YUMCONF} --disablerepo=* --enablerepo=${_REPOID} --resolve --urls ${_PACKAGES}|grep '\.rpm$')
         for _PKG in ${_PKGLIST}; do
-            _PKGS["$(dirname ${_PKG##*/${_BASEDIR}/})"]+="$(basename ${_PKG%.rpm}) "
-        done
-        for _PKGDIR in "${!_PKGS[@]}"; do
-            YUM0=${_RELEASEVER} YUM1=${_ARCH} yumdownloader ${_YUMCONF} ${_QUIET} --disablerepo=* --enablerepo=${_REPOID} --destdir="${_DESTDIR}/${_PKGDIR}" ${_PKGS[${_PKGDIR}]}
+            _DESTPKG="${_PKG##*/${_BASEDIR}/}"
+            _PKGDIR="${_DESTDIR}/$(dirname ${_DESTPKG})"
+            [[ ! -d "${_PKGDIR}" ]] && mkdir -p ${_PKGDIR}
+            rpm -qpi "${_DESTDIR}/${_DESTPKG}" &>/dev/null || curl -o "${_DESTDIR}/${_DESTPKG}" -skL ${_PKG}
         done
     fi
     [ "${_SWALK}" -eq 1 ] && spacewalk_cleanup
@@ -384,7 +383,7 @@ gen_repodata() {
     _REPODIR=$1
     _REPOID=$2
     _DISTRO=$3
-    _FORCE="-C --update"
+    _FORCE="--update"
     _VERBOSE=""
     _PROTECT=" "
     _PROTECTREPO=0
@@ -423,7 +422,7 @@ gen_repodata() {
     if [ "${_REPOID:0:${#LOCALMARKER}}" == "${LOCALMARKER}" -o "${_PROTECTREPO}" -eq 1 ]; then
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     else
-        repomanage -c -o -k ${keep} ${_DESTDIR} | egrep -v "${_PROTECT}" | xargs rm -f
+        repomanage -o -k ${keep} ${_DESTDIR} | egrep -v "${_PROTECT}" | xargs rm -f
         createrepo ${_FORCE} ${_VERBOSE} -s sha --simple-md-filenames --basedir ${_DESTDIR} -o ${_DESTDIR} ${_DESTDIR}
     fi
 }
