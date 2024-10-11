@@ -256,7 +256,7 @@ update_repo() {
     _REPOID=$2
     _DISTRO=$3
     _ARCH=${4:-noarch}
-    _ARCHOPTS="-a noarch -a ${_ARCH}"
+    _ARCHOPTS="-a noarch -a ${_ARCH//,/ -a }"
     _RELEASEVER=$5
     _SYNCALL="-n"
     _DELETE=''
