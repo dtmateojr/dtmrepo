@@ -76,7 +76,7 @@ This will register and initialise dtmrepo. During registration it will ask for y
     ====================================================
     [control]
     releasever = 5Server
-    arch = x86_64
+    arch = x86_64,i686
     keep = 2
     protectrepo = os,optional
 
@@ -125,7 +125,7 @@ IV. Spacewalk Registration
     ==============================================
     [control]
     releasever = 7Server
-    arch = x86_64
+    arch = x86_64,i686
     keep = 3
 
     [repos]
